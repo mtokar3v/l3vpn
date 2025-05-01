@@ -7,35 +7,29 @@ import (
 	"github.com/songgao/water"
 
 	"l3vpn/internal/pf"
+	"l3vpn/internal/tun"
 )
 
 func main() {
 	vpnGw := "10.0.0.3"
 
-	tun, err := createTunInteface()
+	tun, err := tun.Create()
 	if err != nil {
 		panic(err)
 	}
+	log.Printf("Interface created: %s", tun.Name)
 
-	log.Printf("Interface Name: %s\n", tun.Name())
-
-	if err := setUpTunRouting(tun, vpnGw); err != nil {
+	if err := setUpTunRouting(tun.Interface, vpnGw); err != nil {
 		panic(err)
 	}
 
-	if err := setupPF(tun.Name(), vpnGw); err != nil {
+	if err := setupPF(tun.Name, vpnGw); err != nil {
 		panic(err)
 	}
 
-	if err := listenTun(tun); err != nil {
+	if err := tun.Listen(); err != nil {
 		panic(err)
 	}
-}
-
-func createTunInteface() (ifce *water.Interface, err error) {
-	return water.New(water.Config{
-		DeviceType: water.TUN,
-	})
 }
 
 func setUpTunRouting(tun *water.Interface, vpnGw string) error {
@@ -52,19 +46,6 @@ func setUpTunRouting(tun *water.Interface, vpnGw string) error {
 	}
 
 	return nil
-}
-
-func listenTun(tun *water.Interface) error {
-
-	packet := make([]byte, 2000)
-
-	for {
-		n, err := tun.Read(packet)
-		if err != nil {
-			return err
-		}
-		log.Printf("Packet Received: % x\n", packet[:n])
-	}
 }
 
 func setupPF(tun, gateway string) error {
