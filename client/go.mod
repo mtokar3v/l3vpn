@@ -1,4 +1,4 @@
-module myvpn
+module l3vpn
 
 go 1.24.1
 
