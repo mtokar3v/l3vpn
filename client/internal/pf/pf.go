@@ -2,14 +2,15 @@ package pf
 
 import (
 	"fmt"
+	"l3vpn/internal/util"
 	"os"
-	"os/exec"
 	"strings"
 )
 
 const (
 	defaultPfConfPath = "/etc/pf.conf"
-	ruleComment       = "# my-vpn-rules"
+	ruleBeginComment  = "# vpn-rules BEGIN"
+	ruleEndComment    = "# vpn-rules END"
 )
 
 type Config struct {
@@ -46,27 +47,33 @@ func (c *Config) editConfig() error {
 	}
 
 	backupPath := path + ".bak"
-	if err := os.WriteFile(backupPath, []byte{}, 0644); err == nil {
-		os.WriteFile(backupPath, content, 0644)
+	if err := os.WriteFile(backupPath, content, 0644); err != nil {
+		return fmt.Errorf("backup failed: %w", err)
 	}
 
 	pfText := string(content)
 	ruleBlock := c.generateRules()
 
-	idx := -1
+	beginIdx := -1
+	endIdx := -1
 	lines := strings.Split(pfText, "\n")
 	for i, line := range lines {
-		if strings.Contains(line, ruleComment) {
-			idx = i
+		if beginIdx == -1 && strings.Contains(line, ruleBeginComment) {
+			beginIdx = i
+			continue
+		}
+
+		if endIdx == -1 && strings.Contains(line, ruleEndComment) {
+			endIdx = i
 			break
 		}
 	}
 
-	if idx != -1 {
+	if beginIdx != -1 {
 		ruleLines := strings.Split(ruleBlock, "\n")
 
-		start := idx
-		end := start + len(ruleLines)
+		start := beginIdx
+		end := endIdx + 1
 
 		newLines := append(lines[:start], ruleLines...)
 		newLines = append(newLines, lines[end:]...)
@@ -82,7 +89,8 @@ func (c *Config) generateRules() string {
 	return fmt.Sprintf(`%s
 vpn_if = "%s"
 vpn_gw = "%s"
-pass out route-to ($vpn_if $vpn_gw) from any to any keep state`, ruleComment, c.Interface, c.Gateway)
+pass out route-to ($vpn_if $vpn_gw) from any to any keep state
+%s`, ruleBeginComment, c.Interface, c.Gateway, ruleEndComment)
 }
 
 func (c *Config) validate() error {
@@ -90,7 +98,7 @@ func (c *Config) validate() error {
 	if path == "" {
 		path = defaultPfConfPath
 	}
-	return exec.Command("sudo", "pfctl", "-n", "-f", path).Run()
+	return util.RunCmd("sudo", "pfctl", "-n", "-f", path)
 }
 
 func (c *Config) reload() error {
@@ -98,9 +106,9 @@ func (c *Config) reload() error {
 	if path == "" {
 		path = defaultPfConfPath
 	}
-	return exec.Command("sudo", "pfctl", "-f", path).Run()
+	return util.RunCmd("sudo", "pfctl", "-f", path)
 }
 
 func (c *Config) enable() error {
-	return exec.Command("sudo", "pfctl", "-e").Run()
+	return util.RunCmd("sudo", "pfctl", "-e")
 }

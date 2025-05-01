@@ -33,19 +33,19 @@ func main() {
 	}
 }
 
-func setupRoute(localIP, gateway, interfaceName string) error {
-	routeConf := &route.Config{
-		InterfaceName: interfaceName,
-		LocalIP:       localIP,
-		Gateway:       gateway,
+func setupRoute(localIP, gateway, ifce string) error {
+	routeSetup := &route.Config{
+		Interface: ifce,
+		LocalIP:   localIP,
+		Gateway:   gateway,
 	}
-	return routeConf.Setup()
+	return routeSetup.Setup()
 }
 
 func setupPF(tun, gateway string) error {
-	pfConf := &pf.Config{
+	pfSetup := &pf.Config{
 		Interface: tun,
 		Gateway:   gateway,
 	}
-	return pfConf.ApplyRules()
+	return pfSetup.ApplyRules()
 }

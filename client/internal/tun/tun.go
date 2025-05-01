@@ -6,7 +6,7 @@ import (
 	"github.com/songgao/water"
 )
 
-const buffer = 2000
+const packetBufferSize = 2000 // in bytes
 
 type TUN struct {
 	Interface *water.Interface
@@ -28,7 +28,7 @@ func Create() (*TUN, error) {
 }
 
 func (t *TUN) Listen() error {
-	packet := make([]byte, buffer)
+	packet := make([]byte, packetBufferSize)
 
 	for {
 		n, err := t.Interface.Read(packet)
