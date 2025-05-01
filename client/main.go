@@ -2,28 +2,29 @@ package main
 
 import (
 	"log"
-	"os/exec"
-
-	"github.com/songgao/water"
 
 	"l3vpn/internal/pf"
+	"l3vpn/internal/route"
 	"l3vpn/internal/tun"
 )
 
-func main() {
-	vpnGw := "10.0.0.3"
+const (
+	localIP = "10.0.0.1"
+	Gateway = "10.0.0.3"
+)
 
+func main() {
 	tun, err := tun.Create()
 	if err != nil {
 		panic(err)
 	}
 	log.Printf("Interface created: %s", tun.Name)
 
-	if err := setUpTunRouting(tun.Interface, vpnGw); err != nil {
+	if err := setupRoute(localIP, Gateway, tun.Name); err != nil {
 		panic(err)
 	}
 
-	if err := setupPF(tun.Name, vpnGw); err != nil {
+	if err := setupPF(tun.Name, Gateway); err != nil {
 		panic(err)
 	}
 
@@ -32,20 +33,13 @@ func main() {
 	}
 }
 
-func setUpTunRouting(tun *water.Interface, vpnGw string) error {
-	kernelIpv4 := "10.0.0.1"
-
-	err := exec.Command("sudo", "ifconfig", tun.Name(), kernelIpv4, vpnGw, "up").Run()
-	if err != nil {
-		return err
+func setupRoute(localIP, gateway, interfaceName string) error {
+	routeConf := &route.Config{
+		InterfaceName: interfaceName,
+		LocalIP:       localIP,
+		Gateway:       gateway,
 	}
-
-	exec.Command("route", "add", "default", vpnGw).Run()
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return routeConf.Setup()
 }
 
 func setupPF(tun, gateway string) error {
