@@ -1,7 +1,11 @@
 package main
 
 import (
+	"context"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"l3vpn/internal/pf"
 	"l3vpn/internal/route"
@@ -14,6 +18,9 @@ const (
 )
 
 func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
+
 	tun, err := tun.Create()
 	if err != nil {
 		panic(err)
@@ -24,9 +31,17 @@ func main() {
 		panic(err)
 	}
 
-	if err := setupPF(tun.Name, Gateway); err != nil {
+	pfCong, err := setupPF(tun.Name, Gateway)
+	if err != nil {
 		panic(err)
 	}
+
+	go func() {
+		<-ctx.Done()
+		log.Print("Cleaning rules...")
+		pfCong.RemoveRules()
+		os.Exit(0)
+	}()
 
 	if err := tun.Listen(); err != nil {
 		panic(err)
@@ -42,10 +57,10 @@ func setupRoute(localIP, gateway, ifce string) error {
 	return routeSetup.Setup()
 }
 
-func setupPF(tun, gateway string) error {
+func setupPF(tun, gateway string) (*pf.Config, error) {
 	pfSetup := &pf.Config{
 		Interface: tun,
 		Gateway:   gateway,
 	}
-	return pfSetup.ApplyRules()
+	return pfSetup, pfSetup.ApplyRules()
 }

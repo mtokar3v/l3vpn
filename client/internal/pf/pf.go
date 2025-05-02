@@ -3,6 +3,7 @@ package pf
 import (
 	"fmt"
 	"l3vpn/internal/util"
+	"log"
 	"os"
 	"strings"
 )
@@ -30,59 +31,94 @@ func (c *Config) ApplyRules() error {
 		return fmt.Errorf("pfctl reload failed: %w", err)
 	}
 	if err := c.enable(); err != nil {
-		fmt.Printf("warning: failed to enable pf: %v\n", err)
+		log.Printf("warning: failed to enable pf: %v", err)
+	}
+	return nil
+}
+
+func (c *Config) RemoveRules() error {
+	if err := c.cleanConfig(); err != nil {
+		return fmt.Errorf("failed to clean pf.conf: %w", err)
+	}
+	if err := c.validate(); err != nil {
+		return fmt.Errorf("pf.conf validation failed: %w", err)
+	}
+	if err := c.reload(); err != nil {
+		return fmt.Errorf("pfctl reload failed: %w", err)
 	}
 	return nil
 }
 
 func (c *Config) editConfig() error {
-	path := c.FilePath
-	if path == "" {
-		path = defaultPfConfPath
-	}
+	path := c.getPath()
 
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
 
-	backupPath := path + ".bak"
-	if err := os.WriteFile(backupPath, content, 0644); err != nil {
-		return fmt.Errorf("backup failed: %w", err)
+	if err := backupFile(path, content); err != nil {
+		return err
 	}
 
-	pfText := string(content)
-	ruleBlock := c.generateRules()
+	lines := strings.Split(string(content), "\n")
+	beginIdx, endIdx := c.findRuleBlockIdxs(lines)
+	newRules := strings.Split(c.generateRules(), "\n")
 
-	beginIdx := -1
-	endIdx := -1
-	lines := strings.Split(pfText, "\n")
+	var newLines []string
+	if beginIdx != -1 && endIdx != -1 {
+		newLines = append(lines[:beginIdx], newRules...)
+		newLines = append(newLines, lines[endIdx+1:]...)
+	} else {
+		newLines = append(lines, newRules...)
+	}
+
+	return os.WriteFile(path, []byte(strings.Join(newLines, "\n")), 0644)
+}
+
+func (c *Config) cleanConfig() error {
+	path := c.getPath()
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	lines := strings.Split(string(content), "\n")
+	beginIdx, endIdx := c.findRuleBlockIdxs(lines)
+
+	if beginIdx == -1 || endIdx == -1 || beginIdx > endIdx {
+		return nil // ничего не удаляем
+	}
+
+	newLines := append(lines[:beginIdx], lines[endIdx+1:]...)
+	return os.WriteFile(path, []byte(strings.Join(newLines, "\n")), 0644)
+}
+
+func (c *Config) findRuleBlockIdxs(lines []string) (int, int) {
+	beginIdx, endIdx := -1, -1
 	for i, line := range lines {
 		if beginIdx == -1 && strings.Contains(line, ruleBeginComment) {
 			beginIdx = i
 			continue
 		}
-
 		if endIdx == -1 && strings.Contains(line, ruleEndComment) {
 			endIdx = i
 			break
 		}
 	}
+	return beginIdx, endIdx
+}
 
-	if beginIdx != -1 {
-		ruleLines := strings.Split(ruleBlock, "\n")
-
-		start := beginIdx
-		end := endIdx + 1
-
-		newLines := append(lines[:start], ruleLines...)
-		newLines = append(newLines, lines[end:]...)
-		pfText = strings.Join(newLines, "\n")
-	} else {
-		pfText += "\n" + ruleBlock
+func (c *Config) getPath() string {
+	if c.FilePath != "" {
+		return c.FilePath
 	}
+	return defaultPfConfPath
+}
 
-	return os.WriteFile(path, []byte(pfText), 0644)
+func backupFile(path string, content []byte) error {
+	return os.WriteFile(path+".bak", content, 0644)
 }
 
 func (c *Config) generateRules() string {
@@ -94,19 +130,11 @@ pass out route-to ($vpn_if $vpn_gw) from any to any keep state
 }
 
 func (c *Config) validate() error {
-	path := c.FilePath
-	if path == "" {
-		path = defaultPfConfPath
-	}
-	return util.RunCmd("sudo", "pfctl", "-n", "-f", path)
+	return util.RunCmd("sudo", "pfctl", "-n", "-f", c.getPath())
 }
 
 func (c *Config) reload() error {
-	path := c.FilePath
-	if path == "" {
-		path = defaultPfConfPath
-	}
-	return util.RunCmd("sudo", "pfctl", "-f", path)
+	return util.RunCmd("sudo", "pfctl", "-f", c.getPath())
 }
 
 func (c *Config) enable() error {
