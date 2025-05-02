@@ -1,7 +1,7 @@
 package tun
 
 import (
-	"log"
+	"l3vpn/internal/util"
 
 	"github.com/songgao/water"
 )
@@ -35,6 +35,7 @@ func (t *TUN) Listen() error {
 		if err != nil {
 			return err
 		}
-		log.Printf("Packet Received: % x\n", packet[:n])
+
+		util.LogIPv4Packet(packet[:n])
 	}
 }
