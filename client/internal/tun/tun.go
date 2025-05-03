@@ -1,7 +1,10 @@
 package tun
 
 import (
-	"l3vpn/internal/util"
+	"encoding/binary"
+	"l3vpn-client/internal/util"
+	"log"
+	"net"
 
 	"github.com/songgao/water"
 )
@@ -27,7 +30,7 @@ func Create() (*TUN, error) {
 	}, nil
 }
 
-func (t *TUN) Listen() error {
+func (t *TUN) ForwardPackets(conn net.Conn) error {
 	packet := make([]byte, packetBufferSize)
 
 	for {
@@ -37,5 +40,14 @@ func (t *TUN) Listen() error {
 		}
 
 		util.LogIPv4Packet(packet[:n])
+
+		length := make([]byte, 2)
+		binary.BigEndian.PutUint16(length, uint16(n))
+
+		_, err = conn.Write(append(length, packet[:n]...))
+		if err != nil {
+			log.Printf("Failed to write to TCP connection: %v", err)
+			continue
+		}
 	}
 }

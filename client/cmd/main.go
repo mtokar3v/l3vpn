@@ -3,23 +3,33 @@ package main
 import (
 	"context"
 	"log"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
 
-	"l3vpn/internal/pf"
-	"l3vpn/internal/route"
-	"l3vpn/internal/tun"
+	"l3vpn-client/internal/pf"
+	"l3vpn-client/internal/route"
+	"l3vpn-client/internal/tun"
 )
 
 const (
 	localIP = "10.0.0.1"
 	Gateway = "10.0.0.3"
+
+	VpnIP   = "127.0.0.1" // TODO: read from console or settings
+	VpnPort = "1337"      //
 )
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
+
+	conn, err := net.Dial("tcp", VpnIP+":"+VpnPort)
+	if err != nil {
+		panic(err)
+	}
+	defer conn.Close()
 
 	tun, err := tun.Create()
 	if err != nil {
@@ -43,7 +53,7 @@ func main() {
 		os.Exit(0)
 	}()
 
-	if err := tun.Listen(); err != nil {
+	if err := tun.ForwardPackets(conn); err != nil {
 		panic(err)
 	}
 }

@@ -2,7 +2,7 @@ package pf
 
 import (
 	"fmt"
-	"l3vpn/internal/util"
+	"l3vpn-client/internal/util"
 	"log"
 )
 

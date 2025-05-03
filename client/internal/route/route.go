@@ -3,7 +3,7 @@ package route
 import (
 	"fmt"
 
-	"l3vpn/internal/util"
+	"l3vpn-client/internal/util"
 )
 
 type Config struct {
