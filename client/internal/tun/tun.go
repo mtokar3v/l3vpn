@@ -1,8 +1,8 @@
 package tun
 
 import (
-	"encoding/binary"
 	"fmt"
+	"l3vpn-client/internal/protocol"
 	"l3vpn-client/internal/util"
 	"net"
 
@@ -31,20 +31,16 @@ func Create() (*TUN, error) {
 }
 
 func (t *TUN) ForwardPackets(conn net.Conn) error {
-	packet := make([]byte, packetBufferSize)
-
+	buf := make([]byte, packetBufferSize)
 	for {
-		n, err := t.Interface.Read(packet)
+		n, err := t.Interface.Read(buf)
 		if err != nil {
 			return err
 		}
-
-		util.LogIPv4Packet(packet[:n])
-
-		length := make([]byte, 2)
-		binary.BigEndian.PutUint16(length, uint16(n))
-
-		_, err = conn.Write(append(length, packet[:n]...))
+		packet := buf[:n]
+		util.LogIPv4Packet(packet)
+		vp := protocol.NewVPNProtocol(packet) // wrap tun traffic into custom protocol
+		_, err = conn.Write(vp.Serialize())
 		if err != nil {
 			return fmt.Errorf("Failed to write to TCP connection: %v", err)
 		}

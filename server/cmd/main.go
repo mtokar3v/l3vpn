@@ -2,12 +2,11 @@ package main
 
 import (
 	"bufio"
-	"encoding/binary"
-	"io"
 	"l3vpn-server/internal/encapsulation"
 	"l3vpn-server/internal/pat"
 	"l3vpn-server/internal/tun"
 	"l3vpn-server/internal/util"
+	"l3vpn-server/protocol"
 	"log"
 	"net"
 )
@@ -49,20 +48,13 @@ func handleConnection(conn net.Conn, tun *tun.TUN) {
 	reader := bufio.NewReader(conn)
 
 	for {
-		lenBytes := make([]byte, 2)
-		if _, err := reader.Read(lenBytes); err != nil {
-			log.Printf("Failed to read length: %v", err)
-			continue
-		}
-		length := binary.BigEndian.Uint16(lenBytes)
-
-		segment := make([]byte, length)
-		if _, err := io.ReadFull(reader, segment); err != nil {
-			log.Printf("Failed to read packet: %v", err)
+		vp, err := protocol.Read(reader)
+		if err != nil {
+			log.Printf("Failed to read leet: %v", err)
 			continue
 		}
 
-		originIPData, err := encapsulation.DeEncapsulateTCPPacket(segment)
+		originIPData, err := encapsulation.DeEncapsulateTCPPacket(vp.Payload)
 		if err != nil {
 			log.Printf("Failed to de-encapsulate TCP packet: %v", err)
 			continue
