@@ -2,8 +2,8 @@ package tun
 
 import (
 	"encoding/binary"
+	"fmt"
 	"l3vpn-client/internal/util"
-	"log"
 	"net"
 
 	"github.com/songgao/water"
@@ -46,8 +46,7 @@ func (t *TUN) ForwardPackets(conn net.Conn) error {
 
 		_, err = conn.Write(append(length, packet[:n]...))
 		if err != nil {
-			log.Printf("Failed to write to TCP connection: %v", err)
-			continue
+			return fmt.Errorf("Failed to write to TCP connection: %v", err)
 		}
 	}
 }
