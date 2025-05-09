@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"l3vpn-client/internal/forwarder"
 	"l3vpn-client/internal/pf"
 	"l3vpn-client/internal/route"
 	"l3vpn-client/internal/tun"
@@ -47,7 +48,7 @@ func main() {
 		Interface: tun.Name,
 		Gateway:   gateway,
 	}
-	if err := pfConf.ApplyRules(); err != nil {
+	if err := pf.ApplyRules(pfConf); err != nil {
 		log.Fatalf("pf setup failed: %v", err)
 	}
 	defer cleanup(pfConf)
@@ -60,7 +61,7 @@ func main() {
 	}()
 
 	for {
-		if err := tun.ForwardPackets(conn); err != nil {
+		if err := forwarder.ForwardPackets(tun, conn); err != nil {
 			log.Printf("warning: packet forwarding error: %v", err)
 			// reconnect logic could be placed here if desired
 		}
@@ -78,7 +79,7 @@ func connectToVPN() (net.Conn, error) {
 
 func cleanup(pfConf *pf.Config) {
 	log.Println("Cleaning up PF rules...")
-	if err := pfConf.RemoveRules(); err != nil {
+	if err := pf.RemoveRules(pfConf); err != nil {
 		log.Printf("warning: failed to remove pf rules: %v", err)
 	}
 }

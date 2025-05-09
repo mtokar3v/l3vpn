@@ -12,43 +12,43 @@ type Config struct {
 	FilePath  string // pf.conf path override
 }
 
-func (c *Config) ApplyRules() error {
+func ApplyRules(c *Config) error {
 	if err := c.editConfig(); err != nil {
 		return fmt.Errorf("failed to edit pf.conf: %w", err)
 	}
-	if err := c.validate(); err != nil {
+	if err := validate(c); err != nil {
 		return fmt.Errorf("pf.conf validation failed: %w", err)
 	}
-	if err := c.reload(); err != nil {
+	if err := reload(c); err != nil {
 		return fmt.Errorf("pfctl reload failed: %w", err)
 	}
-	if err := c.enable(); err != nil {
+	if err := enable(c); err != nil {
 		log.Printf("warning: failed to enable pf: %v", err)
 	}
 	return nil
 }
 
-func (c *Config) RemoveRules() error {
+func RemoveRules(c *Config) error {
 	if err := c.cleanConfig(); err != nil {
 		return fmt.Errorf("failed to clean pf.conf: %w", err)
 	}
-	if err := c.validate(); err != nil {
+	if err := validate(c); err != nil {
 		return fmt.Errorf("pf.conf validation failed: %w", err)
 	}
-	if err := c.reload(); err != nil {
+	if err := reload(c); err != nil {
 		return fmt.Errorf("pfctl reload failed: %w", err)
 	}
 	return nil
 }
 
-func (c *Config) validate() error {
+func validate(c *Config) error {
 	return util.RunCmd("sudo", "pfctl", "-n", "-f", c.getPath())
 }
 
-func (c *Config) reload() error {
+func reload(c *Config) error {
 	return util.RunCmd("sudo", "pfctl", "-f", c.getPath())
 }
 
-func (c *Config) enable() error {
+func enable(c *Config) error {
 	return util.RunCmd("sudo", "pfctl", "-e")
 }
