@@ -12,7 +12,7 @@ type Config struct {
 	Gateway   string
 }
 
-func (c *Config) Setup() error {
+func Setup(c *Config) error {
 	if err := util.RunCmd("sudo", "ifconfig", c.Interface, c.LocalIP, c.Gateway, "up"); err != nil {
 		return fmt.Errorf("failed to add default route: %w", err)
 	}

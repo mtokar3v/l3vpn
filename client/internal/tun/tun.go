@@ -16,7 +16,7 @@ type TUN struct {
 	Name      string
 }
 
-func Create() (*TUN, error) {
+func NewTUN() (*TUN, error) {
 	ifce, err := water.New(water.Config{
 		DeviceType: water.TUN,
 	})

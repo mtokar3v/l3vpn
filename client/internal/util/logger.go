@@ -32,6 +32,8 @@ func LogIPv4Packet(data []byte) {
 		if err := logUDPPacket(packet.Layer(layers.LayerTypeUDP), ip); err != nil {
 			log.Print(err)
 		}
+	default:
+		log.Printf("strange %s", ip.Protocol)
 	}
 }
 

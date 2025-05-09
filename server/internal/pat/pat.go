@@ -31,7 +31,7 @@ func ChangeIPv4AndPort(originIPData []byte) ([]byte, error) {
 	var transport gopacket.SerializableLayer
 
 	switch ip.Protocol {
-	/*case layers.IPProtocolTCP:
+	case layers.IPProtocolTCP:
 		tcpLayer := packet.Layer(layers.LayerTypeTCP)
 		if tcpLayer == nil {
 			return nil, errors.New("not an TCP packet")
@@ -48,7 +48,7 @@ func ChangeIPv4AndPort(originIPData []byte) ([]byte, error) {
 		udp, _ := udpLayer.(*layers.UDP)
 		udp.SrcPort = layers.UDPPort(Port)
 		udp.SetNetworkLayerForChecksum(ip)
-		transport = udp*/
+		transport = udp
 	default:
 		return nil, fmt.Errorf("unsupported protocol: %s", ip.Protocol)
 	}
