@@ -1,4 +1,4 @@
-package pat
+package nat
 
 import (
 	"errors"
@@ -9,12 +9,7 @@ import (
 	"github.com/google/gopacket/layers"
 )
 
-const (
-	Port = 1338
-	IP   = "127.0.0.2"
-)
-
-func ChangeIPv4AndPort(originIPData []byte) ([]byte, error) {
+func TranslateOutbound(originIPData []byte, natTable *NatTable, srcIPAddr string) ([]byte, error) {
 	packet := gopacket.NewPacket(originIPData, layers.LayerTypeIPv4, gopacket.Default)
 
 	ipLayer := packet.Layer(layers.LayerTypeIPv4)
@@ -26,10 +21,11 @@ func ChangeIPv4AndPort(originIPData []byte) ([]byte, error) {
 	if !ok {
 		return nil, errors.New("Failed to cast to IPv4 layer")
 	}
-	ip.SrcIP = net.ParseIP(IP).To4()
 
 	var transport gopacket.SerializableLayer
+	srcPort := natTable.RentPort()
 
+	// TODO: Move to the generic func
 	switch ip.Protocol {
 	case layers.IPProtocolTCP:
 		tcpLayer := packet.Layer(layers.LayerTypeTCP)
@@ -37,7 +33,14 @@ func ChangeIPv4AndPort(originIPData []byte) ([]byte, error) {
 			return nil, errors.New("not an TCP packet")
 		}
 		tcp, _ := tcpLayer.(*layers.TCP)
-		tcp.SrcPort = layers.TCPPort(Port)
+
+		orgSocket := Socket{IPAddr: ip.SrcIP.String(), Port: uint16(tcp.SrcPort)}
+		dstSocket := Socket{IPAddr: ip.DstIP.String(), Port: uint16(tcp.DstPort)}
+		ft := FiveTuple{Src: orgSocket, Dst: dstSocket, Protocol: "TCP"}
+		srcSocket := getSrcSocket(ft, srcIPAddr, natTable)
+		tcp.SrcPort = layers.TCPPort(srcSocket.Port)
+		ip.SrcIP = net.ParseIP(srcIPAddr).To4()
+
 		tcp.SetNetworkLayerForChecksum(ip)
 		transport = tcp
 	case layers.IPProtocolUDP:
@@ -46,7 +49,7 @@ func ChangeIPv4AndPort(originIPData []byte) ([]byte, error) {
 			return nil, errors.New("not an UDP packet")
 		}
 		udp, _ := udpLayer.(*layers.UDP)
-		udp.SrcPort = layers.UDPPort(Port)
+		udp.SrcPort = layers.UDPPort(srcPort)
 		udp.SetNetworkLayerForChecksum(ip)
 		transport = udp
 	default:
@@ -68,6 +71,16 @@ func ChangeIPv4AndPort(originIPData []byte) ([]byte, error) {
 	}
 
 	return changedIPData, nil
+}
+
+func getSrcSocket(ft FiveTuple, srcIPAddr string, nt *NatTable) Socket {
+	srcSocket, ok := nt.Get(ft)
+	if !ok {
+		port := nt.RentPort()
+		srcSocket := Socket{IPAddr: srcIPAddr, Port: port}
+		nt.Set(ft, srcSocket)
+	}
+	return srcSocket
 }
 
 func encapsulate(layers ...gopacket.SerializableLayer) ([]byte, error) {

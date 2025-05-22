@@ -5,8 +5,9 @@ import (
 	"io"
 	"log"
 	"net"
+	"strings"
 
-	"l3vpn-server/internal/pat"
+	"l3vpn-server/internal/nat"
 	"l3vpn-server/internal/tun"
 	"l3vpn-server/internal/util"
 	"l3vpn-server/protocol"
@@ -40,7 +41,7 @@ func main() {
 	}
 }
 
-func handleConn(conn net.Conn, tun *tun.TUN) {
+func handleConn(conn net.Conn, tun *tun.TUN, natTable *nat.NatTable) {
 	defer func() {
 		log.Printf("closing connection: %s", conn.RemoteAddr())
 		conn.Close()
@@ -59,7 +60,8 @@ func handleConn(conn net.Conn, tun *tun.TUN) {
 			continue
 		}
 
-		packet, err := pat.ChangeIPv4AndPort(msg.Payload)
+		natTable.Set(srcSocket, src nat.Socket, dst nat.Socket, protocol string)
+		packet, err := nat.TranslateOutbound(msg.Payload, )
 		if err != nil {
 			log.Printf("failed to apply PAT: %v", err)
 			continue
