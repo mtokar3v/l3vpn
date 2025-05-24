@@ -6,6 +6,8 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 
 	"l3vpn-client/internal/forwarder"
@@ -44,9 +46,11 @@ func main() {
 		log.Fatalf("route setup failed: %v", err)
 	}
 
+	port, err := strconv.Atoi(strings.Split(vpnAddr, ":")[1])
 	pfConf := &pf.Config{
-		Interface: tun.Name,
-		Gateway:   gateway,
+		Interface:  tun.Name,
+		Gateway:    gateway,
+		ByPassPort: port,
 	}
 	if err := pf.ApplyRules(pfConf); err != nil {
 		log.Fatalf("pf setup failed: %v", err)

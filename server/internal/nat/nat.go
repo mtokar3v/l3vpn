@@ -95,5 +95,11 @@ func encapsulate(layers ...gopacket.SerializableLayer) ([]byte, error) {
 	if err := gopacket.SerializeLayers(buf, opt, layers...); err != nil {
 		return nil, err
 	}
+
+	fmt.Println(len(layers))
+	fmt.Println("---")
+	fmt.Printf("% X\n", buf.Bytes())
+	fmt.Println("---")
+
 	return buf.Bytes(), nil
 }

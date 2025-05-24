@@ -7,9 +7,10 @@ import (
 )
 
 type Config struct {
-	Interface string // utunX
-	Gateway   string // VPN-Gateway IP
-	FilePath  string // pf.conf path override
+	Interface  string // utunX
+	Gateway    string // VPN-Gateway IP
+	FilePath   string // pf.conf path override
+	ByPassPort int
 }
 
 func ApplyRules(c *Config) error {
