@@ -35,9 +35,6 @@ func TranslateOutbound(originIPData []byte, nt *NatTable, srcIPAddr string) ([]b
 
 func translateTCP(packet gopacket.Packet, ip *layers.IPv4, srcIPAddr string, nt *NatTable) ([]byte, error) {
 	tcpLayer := packet.Layer(layers.LayerTypeTCP)
-	if tcpLayer == nil {
-		return nil, errors.New("not an TCP packet")
-	}
 	tcp, _ := tcpLayer.(*layers.TCP)
 
 	orgSocket := Socket{IPAddr: ip.SrcIP.String(), Port: uint16(tcp.SrcPort)}
@@ -54,9 +51,6 @@ func translateTCP(packet gopacket.Packet, ip *layers.IPv4, srcIPAddr string, nt 
 
 func translateUDP(packet gopacket.Packet, ip *layers.IPv4, srcIPAddr string, nt *NatTable) ([]byte, error) {
 	udpLayer := packet.Layer(layers.LayerTypeUDP)
-	if udpLayer == nil {
-		return nil, errors.New("not an UDP packet")
-	}
 	udp, _ := udpLayer.(*layers.UDP)
 
 	orgSocket := Socket{IPAddr: ip.SrcIP.String(), Port: uint16(udp.SrcPort)}

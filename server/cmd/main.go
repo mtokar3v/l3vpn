@@ -11,6 +11,10 @@ import (
 	"l3vpn-server/internal/tun"
 	"l3vpn-server/internal/util"
 	"l3vpn-server/protocol"
+
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/pcap"
 )
 
 const (
@@ -18,19 +22,24 @@ const (
 	publicIP = "127.0.0.2"
 )
 
+// TODO: super straitforward solution like step 1, step 2 etc
+// each step will contains detailed comments
 func main() {
 	tun, err := tun.Create()
 	if err != nil {
 		log.Fatalf("failed to create TUN interface: %v", err)
 	}
 
-	listener, err := net.Listen("tcp", ":"+port)
+	listener, err := net.Listen("tcp4", ":"+port)
 	if err != nil {
 		log.Fatalf("failed to start TCP listener: %v", err)
 	}
 	defer listener.Close()
 
 	log.Printf("VPN server listening on port %s\n", port)
+	nt := nat.NewNatTable()
+
+	go listenForBroadcast()
 
 	for {
 		conn, err := listener.Accept()
@@ -41,7 +50,6 @@ func main() {
 
 		log.Printf("client connected: %s", conn.RemoteAddr())
 
-		nt := nat.NewNatTable()
 		go handleClientConn(conn, tun, nt)
 	}
 }
@@ -101,5 +109,29 @@ func sendIPPacket(rawIPPacket []byte) {
 	if err := syscall.Sendto(fd, rawIPPacket, 0, &dest); err != nil {
 		log.Printf("syscall sendto failed: %v", err)
 		return
+	}
+}
+
+func listenForBroadcast() {
+	iface := "en0" // change this to your network interface
+	handle, err := pcap.OpenLive(iface, 65536, true, pcap.BlockForever)
+	handle.SetBPFFilter("ip dst host 192.168.0.8")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer handle.Close()
+
+	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
+	log.Println("Listening for packets on", iface)
+	for packet := range packetSource.Packets() {
+
+		ethLayer := packet.Layer(layers.LayerTypeEthernet)
+		if ethLayer == nil {
+			log.Println("Not an Ethernet packet")
+			return
+		}
+
+		eth, _ := ethLayer.(*layers.Ethernet)
+		log.Println(eth.Payload)
 	}
 }

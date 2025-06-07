@@ -19,7 +19,7 @@ import (
 const (
 	localIP = "10.0.0.1"
 	gateway = "10.0.0.3"
-	vpnAddr = "127.0.0.1:1337" // TODO: move to config/args
+	vpnAddr = "147.93.120.166:1337" // TODO: move to config/args
 )
 
 func main() {
