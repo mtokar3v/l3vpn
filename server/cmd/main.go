@@ -8,7 +8,6 @@ import (
 	"syscall"
 
 	"l3vpn-server/internal/nat"
-	"l3vpn-server/internal/tun"
 	"l3vpn-server/internal/util"
 	"l3vpn-server/protocol"
 
@@ -25,11 +24,12 @@ const (
 // TODO: super straitforward solution like step 1, step 2 etc
 // each step will contains detailed comments
 func main() {
-	tun, err := tun.Create()
-	if err != nil {
-		log.Fatalf("failed to create TUN interface: %v", err)
-	}
+	nt := nat.NewNatTable()
+	go listenClientTCPTraffic(nt)
+	go listenExternalIPTraffic(nt)
+}
 
+func listenClientTCPTraffic(nt *nat.NatTable) {
 	listener, err := net.Listen("tcp4", ":"+port)
 	if err != nil {
 		log.Fatalf("failed to start TCP listener: %v", err)
@@ -37,9 +37,6 @@ func main() {
 	defer listener.Close()
 
 	log.Printf("VPN server listening on port %s\n", port)
-	nt := nat.NewNatTable()
-
-	go listenForBroadcast()
 
 	for {
 		conn, err := listener.Accept()
@@ -50,11 +47,11 @@ func main() {
 
 		log.Printf("client connected: %s", conn.RemoteAddr())
 
-		go handleClientConn(conn, tun, nt)
+		go handleClientConn(conn, nt)
 	}
 }
 
-func handleClientConn(conn net.Conn, tun *tun.TUN, nt *nat.NatTable) {
+func handleClientConn(conn net.Conn, nt *nat.NatTable) {
 	defer func() {
 		log.Printf("closing connection: %s", conn.RemoteAddr())
 		conn.Close()
@@ -73,7 +70,7 @@ func handleClientConn(conn net.Conn, tun *tun.TUN, nt *nat.NatTable) {
 			continue
 		}
 
-		packet, err := nat.TranslateOutbound(msg.Payload, nt, "192.168.0.50")
+		packet, err := nat.SNAT(msg.Payload, nt, "192.168.0.50")
 		if err != nil {
 			log.Printf("failed to apply PAT: %v", err)
 			continue
@@ -112,7 +109,7 @@ func sendIPPacket(rawIPPacket []byte) {
 	}
 }
 
-func listenForBroadcast() {
+func listenExternalIPTraffic(nt *nat.NatTable) {
 	iface := "en0" // change this to your network interface
 	handle, err := pcap.OpenLive(iface, 65536, true, pcap.BlockForever)
 	handle.SetBPFFilter("ip dst host 192.168.0.8")
@@ -132,6 +129,14 @@ func listenForBroadcast() {
 		}
 
 		eth, _ := ethLayer.(*layers.Ethernet)
-		log.Println(eth.Payload)
+		packet, err := nat.DNAT(eth.Payload, nt)
+		if err != nil {
+			log.Printf("failed to apply PAT: %v", err)
+			continue
+		}
+
+		util.LogIPv4Packet(packet)
+
+		sendIPPacket(packet)
 	}
 }

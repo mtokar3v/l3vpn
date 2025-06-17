@@ -9,8 +9,7 @@ import (
 	"github.com/google/gopacket/layers"
 )
 
-// snat
-func TranslateOutbound(originIPData []byte, nt *NatTable, srcIPAddr string) ([]byte, error) {
+func SNAT(originIPData []byte, nt *NatTable, srcIPAddr string) ([]byte, error) {
 	packet := gopacket.NewPacket(originIPData, layers.LayerTypeIPv4, gopacket.Default)
 
 	ipLayer := packet.Layer(layers.LayerTypeIPv4)
@@ -25,22 +24,28 @@ func TranslateOutbound(originIPData []byte, nt *NatTable, srcIPAddr string) ([]b
 
 	switch ip.Protocol {
 	case layers.IPProtocolTCP:
-		return translateTCP(packet, ip, srcIPAddr, nt)
+		return snatTCP(packet, ip, srcIPAddr, nt)
 	case layers.IPProtocolUDP:
-		return translateUDP(packet, ip, srcIPAddr, nt)
+		return snatUDP(packet, ip, srcIPAddr, nt)
 	default:
 		return nil, fmt.Errorf("unsupported protocol: %s", ip.Protocol)
 	}
 }
 
-func translateTCP(packet gopacket.Packet, ip *layers.IPv4, srcIPAddr string, nt *NatTable) ([]byte, error) {
+func snatTCP(packet gopacket.Packet, ip *layers.IPv4, srcIPAddr string, nt *NatTable) ([]byte, error) {
 	tcpLayer := packet.Layer(layers.LayerTypeTCP)
 	tcp, _ := tcpLayer.(*layers.TCP)
 
 	orgSocket := Socket{IPAddr: ip.SrcIP.String(), Port: uint16(tcp.SrcPort)}
 	dstSocket := Socket{IPAddr: ip.DstIP.String(), Port: uint16(tcp.DstPort)}
-	ft := FiveTuple{Src: orgSocket, Dst: dstSocket, Protocol: "TCP"}
-	srcSocket := getOrCreateSrcSocket(ft, srcIPAddr, nt)
+
+	// server <- vpn (if you know origin and destination it gives you source )
+	tuple := FiveTuple{Src: orgSocket, Dst: dstSocket, Protocol: "TCP"}
+	srcSocket := getOrCreateSrcSocket(tuple, srcIPAddr, nt)
+
+	// vpn -> client (if you know source and destination it gives you origin)
+	translatedTuple := FiveTuple{Src: srcSocket, Dst: dstSocket, Protocol: "TCP"}
+	nt.Set(translatedTuple, orgSocket)
 
 	tcp.SrcPort = layers.TCPPort(srcSocket.Port)
 	ip.SrcIP = net.ParseIP(srcIPAddr).To4()
@@ -49,14 +54,20 @@ func translateTCP(packet gopacket.Packet, ip *layers.IPv4, srcIPAddr string, nt 
 	return serializePacket(ip, tcp, packet)
 }
 
-func translateUDP(packet gopacket.Packet, ip *layers.IPv4, srcIPAddr string, nt *NatTable) ([]byte, error) {
+func snatUDP(packet gopacket.Packet, ip *layers.IPv4, srcIPAddr string, nt *NatTable) ([]byte, error) {
 	udpLayer := packet.Layer(layers.LayerTypeUDP)
 	udp, _ := udpLayer.(*layers.UDP)
 
 	orgSocket := Socket{IPAddr: ip.SrcIP.String(), Port: uint16(udp.SrcPort)}
 	dstSocket := Socket{IPAddr: ip.DstIP.String(), Port: uint16(udp.DstPort)}
-	ft := FiveTuple{Src: orgSocket, Dst: dstSocket, Protocol: "UDP"}
-	srcSocket := getOrCreateSrcSocket(ft, srcIPAddr, nt)
+
+	// server <- vpn (if you know origin and destination it gives you source )
+	tuple := FiveTuple{Src: orgSocket, Dst: dstSocket, Protocol: "UDP"}
+	srcSocket := getOrCreateSrcSocket(tuple, srcIPAddr, nt)
+
+	// vpn -> client (if you know source and destination it gives you origin)
+	translatedTuple := FiveTuple{Src: srcSocket, Dst: dstSocket, Protocol: "UDP"}
+	nt.Set(translatedTuple, orgSocket)
 
 	udp.SrcPort = layers.UDPPort(srcSocket.Port)
 	ip.SrcIP = net.ParseIP(srcIPAddr).To4()
@@ -73,27 +84,4 @@ func getOrCreateSrcSocket(ft FiveTuple, srcIPAddr string, nt *NatTable) Socket {
 		nt.Set(ft, srcSocket)
 	}
 	return srcSocket
-}
-
-func serializePacket(ip *layers.IPv4, transport gopacket.SerializableLayer, packet gopacket.Packet) ([]byte, error) {
-	if app := packet.ApplicationLayer(); app != nil {
-		payload := gopacket.Payload(app.Payload())
-		return encapsulate(ip, transport, payload)
-	}
-	return encapsulate(ip, transport)
-}
-
-func encapsulate(layers ...gopacket.SerializableLayer) ([]byte, error) {
-	buf := gopacket.NewSerializeBuffer()
-	opt := gopacket.SerializeOptions{ComputeChecksums: true, FixLengths: true}
-	if err := gopacket.SerializeLayers(buf, opt, layers...); err != nil {
-		return nil, err
-	}
-
-	fmt.Println(len(layers))
-	fmt.Println("---")
-	fmt.Printf("% X\n", buf.Bytes())
-	fmt.Println("---")
-
-	return buf.Bytes(), nil
 }
