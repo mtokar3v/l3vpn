@@ -22,7 +22,7 @@ func ForwardPackets(t *tun.TUN, conn net.Conn) error {
 		vp := protocol.NewVPNProtocol(packet) // wrap tun traffic into custom protocol
 		_, err = conn.Write(vp.Serialize())
 		if err != nil {
-			return fmt.Errorf("Failed to write to TCP connection: %v", err)
+			return fmt.Errorf("failed to write into connection: %v", err)
 		}
 	}
 }

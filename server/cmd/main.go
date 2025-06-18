@@ -7,6 +7,7 @@ import (
 	"net"
 	"syscall"
 
+	"l3vpn-server/internal/connection"
 	"l3vpn-server/internal/nat"
 	"l3vpn-server/internal/util"
 	"l3vpn-server/protocol"
@@ -118,13 +119,16 @@ func listenExternalIPTraffic(nt *nat.NatTable) {
 	}
 	defer handle.Close()
 
+	connections := connection.NewConnectionPool()
+
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	log.Println("Listening for packets on", iface)
+
 	for packet := range packetSource.Packets() {
 
 		ethLayer := packet.Layer(layers.LayerTypeEthernet)
 		if ethLayer == nil {
-			log.Println("Not an Ethernet packet")
+			log.Println("not an Ethernet packet")
 			return
 		}
 
@@ -137,6 +141,48 @@ func listenExternalIPTraffic(nt *nat.NatTable) {
 
 		util.LogIPv4Packet(packet)
 
-		sendIPPacket(packet)
+		sendIPPacketToClient(packet, connections)
 	}
+}
+
+func sendIPPacketToClient(rawIP []byte, connections *connection.ConnectionPool) bool {
+	packet := gopacket.NewPacket(rawIP, layers.LayerTypeIPv4, gopacket.Default)
+
+	ipLayer := packet.Layer(layers.LayerTypeIPv4)
+	if ipLayer == nil {
+		log.Printf("Not an IPv4 packet")
+		return false
+	}
+
+	ip, _ := ipLayer.(*layers.IPv4)
+
+	clientAddr := ip.DstIP.String() + ":" + port
+
+	// Try to get existing connection
+	conn, ok := connections.Get(clientAddr)
+	if !ok {
+		var err error
+		conn, err = connectToClient(clientAddr)
+		if err != nil {
+			log.Printf("Failed to connect to client %s: %v", clientAddr, err)
+			return false
+		}
+	}
+
+	_, err := conn.Write(rawIP)
+	if err != nil {
+		log.Printf("Failed to write to connection %s: %v", clientAddr, err)
+		return false
+	}
+
+	return true
+}
+
+func connectToClient(ipAddr string) (net.Conn, error) {
+	conn, err := net.Dial("tcp4", ipAddr)
+	if err != nil {
+		return nil, err
+	}
+	log.Println("VPN connection established")
+	return conn, nil
 }
