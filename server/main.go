@@ -28,6 +28,8 @@ func main() {
 	nt := nat.NewNatTable()
 	go listenClientTCPTraffic(nt)
 	go listenExternalIPTraffic(nt)
+
+	select {}
 }
 
 func listenClientTCPTraffic(nt *nat.NatTable) {
