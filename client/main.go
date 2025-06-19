@@ -32,7 +32,12 @@ func main() {
 	defer stop()
 
 	go listenVPNTCPTraffic()
+	go forwardTrafficToVPN(ctx)
 
+	select {}
+}
+
+func forwardTrafficToVPN(ctx context.Context) {
 	tcpConn, err := connectToVPN()
 	if err != nil {
 		log.Fatalf("failed to establish VPN connection: %v", err)
@@ -53,7 +58,7 @@ func main() {
 		log.Fatalf("route setup failed: %v", err)
 	}
 
-	port, err := strconv.Atoi(strings.Split(vpnAddr, ":")[1])
+	port, _ := strconv.Atoi(strings.Split(vpnAddr, ":")[1])
 	pfConf := &pf.Config{
 		Interface:  tun.Name,
 		Gateway:    gateway,
