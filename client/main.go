@@ -31,8 +31,8 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	go listenVPNTCPTraffic()
 	go forwardTrafficToVPN(ctx)
+	go listenVPNTCPTraffic()
 
 	select {}
 }

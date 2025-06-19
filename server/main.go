@@ -19,7 +19,7 @@ import (
 
 const (
 	port     = "1337"
-	publicIP = "127.0.0.2"
+	publicIP = "147.93.120.166"
 )
 
 // TODO: super straitforward solution like step 1, step 2 etc
@@ -73,9 +73,9 @@ func handleClientConn(conn net.Conn, nt *nat.NatTable) {
 			continue
 		}
 
-		packet, err := nat.SNAT(msg.Payload, nt, "192.168.0.50")
+		packet, err := nat.SNAT(msg.Payload, nt, publicIP)
 		if err != nil {
-			log.Printf("failed to apply PAT: %v", err)
+			log.Printf("failed to apply SNAT: %v", err)
 			continue
 		}
 
@@ -113,9 +113,9 @@ func sendIPPacket(rawIPPacket []byte) {
 }
 
 func listenExternalIPTraffic(nt *nat.NatTable) {
-	iface := "en0" // change this to your network interface
+	iface := "eth0" // change this to your network interface
 	handle, err := pcap.OpenLive(iface, 65536, true, pcap.BlockForever)
-	handle.SetBPFFilter("ip dst host 192.168.0.8")
+	handle.SetBPFFilter("not dst port " + port)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -155,10 +155,16 @@ func sendIPPacketToClient(rawIP []byte, connections *connection.ConnectionPool) 
 		log.Printf("Not an IPv4 packet")
 		return false
 	}
-
 	ip, _ := ipLayer.(*layers.IPv4)
 
-	clientAddr := ip.DstIP.String() + ":" + port
+	tcpLayer := packet.Layer(layers.LayerTypeTCP)
+	if ipLayer == nil {
+		log.Printf("Not an IPv4 packet")
+		return false
+	}
+	tcp, _ := tcpLayer.(*layers.TCP)
+
+	clientAddr := ip.DstIP.String() + ":" + tcp.DstPort.String()
 
 	// Try to get existing connection
 	conn, ok := connections.Get(clientAddr)
