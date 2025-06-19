@@ -22,3 +22,7 @@ func NewTUN() (*TUN, error) {
 		Name:      ifce.Name(),
 	}, nil
 }
+
+func (t *TUN) Close() error {
+	return t.Interface.Close()
+}

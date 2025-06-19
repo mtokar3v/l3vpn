@@ -2,6 +2,7 @@ package pf
 
 import (
 	"fmt"
+	"l3vpn-client/internal/config"
 	"os"
 	"strings"
 )
@@ -64,7 +65,7 @@ by_pass_port = "%d"
 
 pass out quick on egress proto tcp from any to any port $by_pass_port keep state
 pass out route-to ($vpn_if $vpn_gw) from any to any keep state
-%s`, ruleBeginComment, c.Interface, c.Gateway, c.ByPassPort, ruleEndComment)
+%s`, ruleBeginComment, c.Interface, config.Gateway, c.ByPassPort, ruleEndComment)
 }
 
 func (c *Config) findRuleBlockIdxs(lines []string) (int, int) {
