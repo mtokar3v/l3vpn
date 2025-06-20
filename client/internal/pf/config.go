@@ -9,6 +9,7 @@ import (
 type Config struct {
 	Interface  string // utunX
 	FilePath   string // pf.conf path override
+	ByPassIP   string
 	ByPassPort int
 }
 

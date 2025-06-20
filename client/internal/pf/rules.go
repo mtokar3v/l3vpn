@@ -61,11 +61,12 @@ func (c *Config) generateRules() string {
 	return fmt.Sprintf(`%s
 vpn_if = "%s"
 vpn_gw = "%s"
+by_pass_ip = "%s"
 by_pass_port = "%d"
 
-pass out quick on egress proto tcp from any to any port $by_pass_port keep state
+pass out quick on egress proto tcp from any to $by_pass_ip port $by_pass_port keep state
 pass out route-to ($vpn_if $vpn_gw) from any to any keep state
-%s`, ruleBeginComment, c.Interface, config.Gateway, c.ByPassPort, ruleEndComment)
+%s`, ruleBeginComment, c.Interface, config.Gateway, c.ByPassIP, c.ByPassPort, ruleEndComment)
 }
 
 func (c *Config) findRuleBlockIdxs(lines []string) (int, int) {

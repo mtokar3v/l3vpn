@@ -9,8 +9,8 @@ import (
 
 	"l3vpn-server/internal/connection"
 	"l3vpn-server/internal/nat"
+	"l3vpn-server/internal/protocol"
 	"l3vpn-server/internal/util"
-	"l3vpn-server/protocol"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -79,7 +79,7 @@ func handleClientConn(conn net.Conn, nt *nat.NatTable) {
 			continue
 		}
 
-		util.LogIPv4Packet(packet)
+		util.LogIPv4Packet("[INBOUND]", packet)
 
 		sendIPPacket(packet)
 	}
@@ -141,7 +141,7 @@ func listenExternalIPTraffic(nt *nat.NatTable) {
 			continue
 		}
 
-		util.LogIPv4Packet(packet)
+		util.LogIPv4Packet("[OUTBOUND]", packet)
 
 		sendIPPacketToClient(packet, connections)
 	}

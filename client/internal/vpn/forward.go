@@ -6,7 +6,6 @@ import (
 	"l3vpn-client/internal/pf"
 	"l3vpn-client/internal/protocol"
 	"l3vpn-client/internal/tun"
-	"l3vpn-client/internal/util"
 	"log"
 	"net"
 	"os"
@@ -15,15 +14,14 @@ import (
 )
 
 func Forward(ctx context.Context) {
+	tcpConn := establishVPNConnection()
+	defer tcpConn.Close()
+
 	tunIf := setupTUN()
 	defer tunIf.Close()
 
 	pfConf := setupPF(tunIf.Name)
 	defer cleanupPF(pfConf)
-
-	// если tcp вначале то нет проблем, как будто бы pf все руинит
-	tcpConn := establishVPNConnection()
-	defer tcpConn.Close()
 
 	handleContextCleanup(ctx, pfConf)
 
@@ -56,6 +54,7 @@ func setupTUN() *tun.TUN {
 func setupPF(interfaceName string) *pf.Config {
 	conf := &pf.Config{
 		Interface:  interfaceName,
+		ByPassIP:   config.VPNAddress,
 		ByPassPort: config.VPNPort,
 	}
 	if err := pf.ApplyRules(conf); err != nil {
@@ -90,7 +89,7 @@ func startForwardingLoop(tunIf *tun.TUN, conn net.Conn) {
 		}
 		packet := buf[:n]
 
-		util.LogIPv4Packet(packet)
+		//util.LogIPv4Packet(packet)
 
 		vp := protocol.NewVPNProtocol(packet)
 		_, err = conn.Write(vp.Serialize())
