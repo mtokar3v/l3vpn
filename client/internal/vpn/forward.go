@@ -4,8 +4,9 @@ import (
 	"context"
 	"l3vpn-client/internal/config"
 	"l3vpn-client/internal/pf"
-	"l3vpn-client/internal/tools"
+	"l3vpn-client/internal/protocol"
 	"l3vpn-client/internal/tun"
+	"l3vpn-client/internal/util"
 	"log"
 	"net"
 	"os"
@@ -80,9 +81,22 @@ func handleContextCleanup(ctx context.Context, pfConf *pf.Config) {
 }
 
 func startForwardingLoop(tunIf *tun.TUN, conn net.Conn) {
+	buf := make([]byte, 2000)
 	for {
-		if err := tools.ForwardPackets(tunIf, conn); err != nil {
+		n, err := tunIf.Interface.Read(buf)
+		if err != nil {
+			log.Printf("warning: tun read fail: %v", err)
+			continue
+		}
+		packet := buf[:n]
+
+		util.LogIPv4Packet(packet)
+
+		vp := protocol.NewVPNProtocol(packet)
+		_, err = conn.Write(vp.Serialize())
+		if err != nil {
 			log.Printf("warning: packet forwarding error: %v", err)
+			continue
 		}
 	}
 }
