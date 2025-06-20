@@ -4,26 +4,25 @@ import (
 	"context"
 	"l3vpn-client/internal/config"
 	"l3vpn-client/internal/pf"
-	"l3vpn-client/internal/route"
 	"l3vpn-client/internal/tools"
 	"l3vpn-client/internal/tun"
 	"log"
 	"net"
 	"os"
 	"strconv"
+	"time"
 )
 
 func Forward(ctx context.Context) {
-	tcpConn := establishVPNConnection()
-	defer tcpConn.Close()
-
 	tunIf := setupTUN()
 	defer tunIf.Close()
 
-	setupRouting(tunIf.Name)
-
 	pfConf := setupPF(tunIf.Name)
 	defer cleanupPF(pfConf)
+
+	// если tcp вначале то нет проблем, как будто бы pf все руинит
+	tcpConn := establishVPNConnection()
+	defer tcpConn.Close()
 
 	handleContextCleanup(ctx, pfConf)
 
@@ -32,11 +31,14 @@ func Forward(ctx context.Context) {
 
 func establishVPNConnection() net.Conn {
 	vpnAddr := config.VPNAddress + ":" + strconv.Itoa(config.VPNPort)
-	conn, err := tools.EstablishVPNConnection(vpnAddr)
+	conn, err := net.Dial("tcp4", vpnAddr)
 	if err != nil {
 		log.Fatalf("failed to establish VPN connection: %v", err)
 	}
 	log.Printf("VPN connection established to %s", vpnAddr)
+
+	time.Sleep(5 * time.Second)
+
 	return conn
 }
 
@@ -46,14 +48,8 @@ func setupTUN() *tun.TUN {
 		log.Fatalf("failed to create TUN interface: %v", err)
 	}
 	log.Printf("TUN interface created: %s", tunIf.Name)
-	return tunIf
-}
 
-func setupRouting(interfaceName string) {
-	if err := route.Setup(interfaceName); err != nil {
-		log.Fatalf("route setup failed: %v", err)
-	}
-	log.Printf("Routing configured for interface: %s", interfaceName)
+	return tunIf
 }
 
 func setupPF(interfaceName string) *pf.Config {

@@ -28,11 +28,3 @@ func ForwardPackets(t *tun.TUN, conn net.Conn) error {
 		}
 	}
 }
-
-func EstablishVPNConnection(addr string) (net.Conn, error) {
-	conn, err := net.Dial("tcp4", addr)
-	if err != nil {
-		return nil, err
-	}
-	return conn, nil
-}
