@@ -26,13 +26,14 @@ const (
 // each step will contains detailed comments
 func main() {
 	nt := nat.NewNatTable()
-	go listenClientTCPTraffic(nt)
-	go listenExternalIPTraffic(nt)
+	cp := connection.NewConnectionPool()
+	go listenClientTCPTraffic(nt, cp)
+	go listenExternalIPTraffic(nt, cp)
 
 	select {}
 }
 
-func listenClientTCPTraffic(nt *nat.NatTable) {
+func listenClientTCPTraffic(nt *nat.NatTable, cp *connection.ConnectionPool) {
 	listener, err := net.Listen("tcp4", ":"+port)
 	if err != nil {
 		log.Fatalf("failed to start TCP listener: %v", err)
@@ -50,6 +51,7 @@ func listenClientTCPTraffic(nt *nat.NatTable) {
 
 		log.Printf("client connected: %s", conn.RemoteAddr())
 
+		cp.Set(conn.RemoteAddr().String(), conn)
 		go handleClientConn(conn, nt)
 	}
 }
@@ -112,7 +114,7 @@ func sendIPPacket(rawIPPacket []byte) {
 	}
 }
 
-func listenExternalIPTraffic(nt *nat.NatTable) {
+func listenExternalIPTraffic(nt *nat.NatTable, cp *connection.ConnectionPool) {
 	iface := "eth0" // change this to your network interface
 	handle, err := pcap.OpenLive(iface, 65536, true, pcap.BlockForever)
 	handle.SetBPFFilter("not dst port " + port)
@@ -120,8 +122,6 @@ func listenExternalIPTraffic(nt *nat.NatTable) {
 		log.Fatal(err)
 	}
 	defer handle.Close()
-
-	connections := connection.NewConnectionPool()
 
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	log.Println("Listening for packets on", iface)
@@ -131,7 +131,7 @@ func listenExternalIPTraffic(nt *nat.NatTable) {
 		ethLayer := packet.Layer(layers.LayerTypeEthernet)
 		if ethLayer == nil {
 			log.Println("not an Ethernet packet")
-			return
+			continue
 		}
 
 		eth, _ := ethLayer.(*layers.Ethernet)
@@ -143,7 +143,7 @@ func listenExternalIPTraffic(nt *nat.NatTable) {
 
 		util.LogIPv4Packet("[OUTBOUND]", packet)
 
-		sendIPPacketToClient(packet, connections)
+		sendIPPacketToClient(packet, cp)
 	}
 }
 
@@ -165,16 +165,10 @@ func sendIPPacketToClient(rawIP []byte, connections *connection.ConnectionPool) 
 	tcp, _ := tcpLayer.(*layers.TCP)
 
 	clientAddr := ip.DstIP.String() + ":" + tcp.DstPort.String()
-
-	// Try to get existing connection
 	conn, ok := connections.Get(clientAddr)
 	if !ok {
-		var err error
-		conn, err = connectToClient(clientAddr)
-		if err != nil {
-			log.Printf("Failed to connect to client %s: %v", clientAddr, err)
-			return false
-		}
+		log.Printf("try to send ip packet to unknown connection %s", clientAddr)
+		return false
 	}
 
 	_, err := conn.Write(rawIP)
@@ -184,13 +178,4 @@ func sendIPPacketToClient(rawIP []byte, connections *connection.ConnectionPool) 
 	}
 
 	return true
-}
-
-func connectToClient(ipAddr string) (net.Conn, error) {
-	conn, err := net.Dial("tcp4", ipAddr)
-	if err != nil {
-		return nil, err
-	}
-	log.Println("VPN connection established")
-	return conn, nil
 }
