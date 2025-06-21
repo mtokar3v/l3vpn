@@ -9,7 +9,7 @@ import (
 	"github.com/google/gopacket/layers"
 )
 
-func SNAT(originIPData []byte, nt *NatTable, srcIPAddr string) ([]byte, error) {
+func SNAT(originIPData []byte, nt *NatTable, orgIPAddr string, orgPort int, srcIPAddr string) ([]byte, error) {
 	packet := gopacket.NewPacket(originIPData, layers.LayerTypeIPv4, gopacket.Default)
 
 	ipLayer := packet.Layer(layers.LayerTypeIPv4)
@@ -24,19 +24,19 @@ func SNAT(originIPData []byte, nt *NatTable, srcIPAddr string) ([]byte, error) {
 
 	switch ip.Protocol {
 	case layers.IPProtocolTCP:
-		return snatTCP(packet, ip, srcIPAddr, nt)
+		return snatTCP(packet, ip, orgIPAddr, orgPort, srcIPAddr, nt)
 	case layers.IPProtocolUDP:
-		return snatUDP(packet, ip, srcIPAddr, nt)
+		return snatUDP(packet, ip, orgIPAddr, orgPort, srcIPAddr, nt)
 	default:
 		return nil, fmt.Errorf("unsupported protocol: %s", ip.Protocol)
 	}
 }
 
-func snatTCP(packet gopacket.Packet, ip *layers.IPv4, srcIPAddr string, nt *NatTable) ([]byte, error) {
+func snatTCP(packet gopacket.Packet, ip *layers.IPv4, orgIPAddr string, orgPort int, srcIPAddr string, nt *NatTable) ([]byte, error) {
 	tcpLayer := packet.Layer(layers.LayerTypeTCP)
 	tcp, _ := tcpLayer.(*layers.TCP)
 
-	orgSocket := Socket{IPAddr: ip.SrcIP.String(), Port: uint16(tcp.SrcPort)}
+	orgSocket := Socket{IPAddr: orgIPAddr, Port: uint16(orgPort)}
 	dstSocket := Socket{IPAddr: ip.DstIP.String(), Port: uint16(tcp.DstPort)}
 
 	// server <- vpn (if you know origin and destination it gives you source )
@@ -54,11 +54,11 @@ func snatTCP(packet gopacket.Packet, ip *layers.IPv4, srcIPAddr string, nt *NatT
 	return serializePacket(ip, tcp, packet)
 }
 
-func snatUDP(packet gopacket.Packet, ip *layers.IPv4, srcIPAddr string, nt *NatTable) ([]byte, error) {
+func snatUDP(packet gopacket.Packet, ip *layers.IPv4, orgIPAddr string, orgPort int, srcIPAddr string, nt *NatTable) ([]byte, error) {
 	udpLayer := packet.Layer(layers.LayerTypeUDP)
 	udp, _ := udpLayer.(*layers.UDP)
 
-	orgSocket := Socket{IPAddr: ip.SrcIP.String(), Port: uint16(udp.SrcPort)}
+	orgSocket := Socket{IPAddr: orgIPAddr, Port: uint16(orgPort)}
 	dstSocket := Socket{IPAddr: ip.DstIP.String(), Port: uint16(udp.DstPort)}
 
 	// server <- vpn (if you know origin and destination it gives you source )
