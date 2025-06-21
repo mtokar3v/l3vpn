@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"strconv"
 	"syscall"
 
 	"l3vpn-server/internal/connection"
@@ -18,8 +19,8 @@ import (
 )
 
 const (
-	port     = "1337"
-	publicIP = "147.93.120.166"
+	port    = "1337"
+	vpnAddr = "147.93.120.166"
 )
 
 // TODO: super straitforward solution like step 1, step 2 etc
@@ -75,7 +76,11 @@ func handleClientConn(conn net.Conn, nt *nat.NatTable) {
 			continue
 		}
 
-		packet, err := nat.SNAT(msg.Payload, nt, publicIP)
+		addrSrt := conn.RemoteAddr().String()
+		orgAddr, portStr, err := net.SplitHostPort(addrSrt)
+		orgPort, _ := strconv.Atoi(portStr)
+
+		packet, err := nat.SNAT(msg.Payload, nt, orgAddr, orgPort, vpnAddr)
 		if err != nil {
 			log.Printf("failed to apply SNAT: %v", err)
 			continue
