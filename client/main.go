@@ -12,8 +12,5 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	go vpn.Forward(ctx)
-	//go vpn.Listen()
-
-	select {}
+	vpn.Start(ctx)
 }

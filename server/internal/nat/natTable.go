@@ -12,6 +12,11 @@ type Socket struct {
 	Port   uint16
 }
 
+type SocketPair struct {
+	Public  Socket
+	Private Socket
+}
+
 type FiveTuple struct {
 	Src      Socket
 	Dst      Socket
@@ -20,29 +25,28 @@ type FiveTuple struct {
 
 type NatTable struct {
 	mu      sync.RWMutex
-	table   map[FiveTuple]Socket
+	table   map[FiveTuple]SocketPair
 	lstPort uint16
 }
 
 func NewNatTable() *NatTable {
 	return &NatTable{
-		table:   make(map[FiveTuple]Socket),
+		table:   make(map[FiveTuple]SocketPair),
 		lstPort: FstPort,
 	}
 }
 
-func (t *NatTable) Get(key FiveTuple) (Socket, bool) {
+func (t *NatTable) Get(key *FiveTuple) (*SocketPair, bool) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	val, ok := t.table[key]
-	return val, ok
+	val, ok := t.table[*key]
+	return &val, ok
 }
 
-func (t *NatTable) Set(ft FiveTuple, org Socket) FiveTuple {
+func (t *NatTable) Set(ft *FiveTuple, sp *SocketPair) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.table[ft] = org
-	return ft
+	t.table[*ft] = *sp
 }
 
 func (t *NatTable) RentPort() uint16 {

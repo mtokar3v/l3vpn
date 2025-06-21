@@ -14,13 +14,11 @@ import (
 	"time"
 )
 
-func Forward(ctx context.Context) {
+func Start(ctx context.Context) {
 	log.Println("start forwarding")
 
 	tcpConn := establishVPNConnection()
 	defer tcpConn.Close()
-
-	go listen(tcpConn)
 
 	tunIf := setupTUN()
 	defer tunIf.Close()
@@ -30,9 +28,13 @@ func Forward(ctx context.Context) {
 
 	handleContextCleanup(ctx, pfConf)
 
-	startForwardingLoop(tunIf, tcpConn)
+	// TODO: refactor it plz
+	go startListeningLoop(tunIf, tcpConn)
+	go startForwardingLoop(tunIf, tcpConn)
 
 	log.Print("end forwarding")
+
+	select {}
 }
 
 func establishVPNConnection() net.Conn {
@@ -49,7 +51,7 @@ func establishVPNConnection() net.Conn {
 	return conn
 }
 
-func listen(conn net.Conn) {
+func startListeningLoop(tunIf *tun.TUN, conn net.Conn) {
 	log.Println("start listening")
 	buf := make([]byte, 2000)
 	for {
@@ -61,6 +63,12 @@ func listen(conn net.Conn) {
 
 		packet := buf[:n]
 		util.LogIPv4Packet(packet)
+
+		_, err = tunIf.Interface.Write(packet)
+		if err != nil {
+			log.Printf("warning: tun write fail: %v", err)
+			continue
+		}
 	}
 }
 

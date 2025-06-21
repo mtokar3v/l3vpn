@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"syscall"
 
+	"l3vpn-server/internal/config"
 	"l3vpn-server/internal/connection"
 	"l3vpn-server/internal/nat"
 	"l3vpn-server/internal/protocol"
@@ -16,11 +17,6 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
-)
-
-const (
-	port    = "1337"
-	vpnAddr = "147.93.120.166"
 )
 
 // TODO: super straitforward solution like step 1, step 2 etc
@@ -35,13 +31,13 @@ func main() {
 }
 
 func listenClientTCPTraffic(nt *nat.NatTable, cp *connection.ConnectionPool) {
-	listener, err := net.Listen("tcp4", ":"+port)
+	listener, err := net.Listen("tcp4", ":"+config.VPNPort)
 	if err != nil {
 		log.Fatalf("failed to start TCP listener: %v", err)
 	}
 	defer listener.Close()
 
-	log.Printf("VPN server listening on port %s\n", port)
+	log.Printf("VPN server listening on port %s\n", config.VPNPort)
 
 	for {
 		conn, err := listener.Accept()
@@ -76,11 +72,14 @@ func handleClientConn(conn net.Conn, nt *nat.NatTable) {
 			continue
 		}
 
-		addrSrt := conn.RemoteAddr().String()
-		orgAddr, portStr, err := net.SplitHostPort(addrSrt)
-		orgPort, _ := strconv.Atoi(portStr)
+		publicSocket := connection.RemoteSocket(conn)
+		privateSocket := connection.LocalSocket(conn)
+		orgSockets := &nat.SocketPair{
+			Public:  publicSocket,
+			Private: privateSocket,
+		}
 
-		packet, err := nat.SNAT(msg.Payload, nt, orgAddr, orgPort, vpnAddr)
+		packet, err := nat.SNAT(msg.Payload, nt, orgSockets)
 		if err != nil {
 			log.Printf("failed to apply SNAT: %v", err)
 			continue
@@ -122,7 +121,7 @@ func sendIPPacket(rawIPPacket []byte) {
 func listenExternalIPTraffic(nt *nat.NatTable, cp *connection.ConnectionPool) {
 	iface := "eth0" // change this to your network interface
 	handle, err := pcap.OpenLive(iface, 65536, true, pcap.BlockForever)
-	handle.SetBPFFilter("not dst port " + port)
+	handle.SetBPFFilter("not dst port " + config.VPNPort)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -140,7 +139,7 @@ func listenExternalIPTraffic(nt *nat.NatTable, cp *connection.ConnectionPool) {
 		}
 
 		eth, _ := ethLayer.(*layers.Ethernet)
-		packet, err := nat.DNAT(eth.Payload, nt)
+		socket, packet, err := nat.DNAT(eth.Payload, nt)
 		if err != nil {
 			log.Printf("failed to apply PAT: %v", err)
 			continue
@@ -148,28 +147,12 @@ func listenExternalIPTraffic(nt *nat.NatTable, cp *connection.ConnectionPool) {
 
 		util.LogIPv4Packet("[OUTBOUND]", packet)
 
-		sendIPPacketToClient(packet, cp)
+		sendIPPacketToClient(socket, packet, cp)
 	}
 }
 
-func sendIPPacketToClient(rawIP []byte, connections *connection.ConnectionPool) bool {
-	packet := gopacket.NewPacket(rawIP, layers.LayerTypeIPv4, gopacket.Default)
-
-	ipLayer := packet.Layer(layers.LayerTypeIPv4)
-	if ipLayer == nil {
-		log.Printf("Not an IPv4 packet")
-		return false
-	}
-	ip, _ := ipLayer.(*layers.IPv4)
-
-	tcpLayer := packet.Layer(layers.LayerTypeTCP)
-	if ipLayer == nil {
-		log.Printf("Not an IPv4 packet")
-		return false
-	}
-	tcp, _ := tcpLayer.(*layers.TCP)
-
-	clientAddr := ip.DstIP.String() + ":" + tcp.DstPort.String()
+func sendIPPacketToClient(socket *nat.Socket, rawIP []byte, connections *connection.ConnectionPool) bool {
+	clientAddr := socket.IPAddr + ":" + strconv.Itoa(int(socket.Port))
 	conn, ok := connections.Get(clientAddr)
 	if !ok {
 		log.Printf("try to send ip packet to unknown connection %s", clientAddr)
