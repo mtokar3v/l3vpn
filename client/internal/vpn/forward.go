@@ -6,6 +6,7 @@ import (
 	"l3vpn-client/internal/pf"
 	"l3vpn-client/internal/protocol"
 	"l3vpn-client/internal/tun"
+	"l3vpn-client/internal/util"
 	"log"
 	"net"
 	"os"
@@ -14,8 +15,12 @@ import (
 )
 
 func Forward(ctx context.Context) {
+	log.Println("start forwarding")
+
 	tcpConn := establishVPNConnection()
 	defer tcpConn.Close()
+
+	go listen(tcpConn)
 
 	tunIf := setupTUN()
 	defer tunIf.Close()
@@ -26,10 +31,13 @@ func Forward(ctx context.Context) {
 	handleContextCleanup(ctx, pfConf)
 
 	startForwardingLoop(tunIf, tcpConn)
+
+	log.Print("end forwarding")
 }
 
 func establishVPNConnection() net.Conn {
 	vpnAddr := config.VPNAddress + ":" + strconv.Itoa(config.VPNPort)
+	log.Printf("try to connect to %s", vpnAddr)
 	conn, err := net.Dial("tcp4", vpnAddr)
 	if err != nil {
 		log.Fatalf("failed to establish VPN connection: %v", err)
@@ -39,6 +47,21 @@ func establishVPNConnection() net.Conn {
 	time.Sleep(5 * time.Second)
 
 	return conn
+}
+
+func listen(conn net.Conn) {
+	log.Println("start listening")
+	buf := make([]byte, 2000)
+	for {
+		n, err := conn.Read(buf)
+		if err != nil {
+			log.Printf("listening error %v", err)
+			continue
+		}
+
+		packet := buf[:n]
+		util.LogIPv4Packet(packet)
+	}
 }
 
 func setupTUN() *tun.TUN {
@@ -80,6 +103,7 @@ func handleContextCleanup(ctx context.Context, pfConf *pf.Config) {
 }
 
 func startForwardingLoop(tunIf *tun.TUN, conn net.Conn) {
+	log.Println("start forwarding")
 	buf := make([]byte, 2000)
 	for {
 		n, err := tunIf.Interface.Read(buf)

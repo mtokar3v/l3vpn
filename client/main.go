@@ -13,7 +13,7 @@ func main() {
 	defer stop()
 
 	go vpn.Forward(ctx)
-	go vpn.Listen()
+	//go vpn.Listen()
 
 	select {}
 }
