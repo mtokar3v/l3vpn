@@ -121,7 +121,7 @@ func sendIPPacket(rawIPPacket []byte) {
 func listenExternalIPTraffic(nt *nat.NatTable, cp *connection.ConnectionPool) {
 	iface := "eth0" // change this to your network interface
 	handle, err := pcap.OpenLive(iface, 65536, true, pcap.BlockForever)
-	handle.SetBPFFilter("not dst port " + config.VPNPort)
+	//handle.SetBPFFilter("not dst port " + config.VPNPort)
 	if err != nil {
 		log.Fatal(err)
 	}
