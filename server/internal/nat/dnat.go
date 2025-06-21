@@ -45,8 +45,8 @@ func dnatTCP(packet gopacket.Packet, ip *layers.IPv4, nt *NatTable) (*Socket, []
 		return nil, nil, errors.New("unknown five tuple for dnat")
 	}
 
-	tcp.DstPort = layers.TCPPort(orgSockets.Public.Port)
-	ip.DstIP = net.ParseIP(orgSockets.Public.IPAddr).To4()
+	tcp.DstPort = layers.TCPPort(orgSockets.Private.Port)
+	ip.DstIP = net.ParseIP(orgSockets.Private.IPAddr).To4()
 	tcp.SetNetworkLayerForChecksum(ip)
 
 	data, err := serializePacket(ip, tcp, packet)
