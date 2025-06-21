@@ -72,14 +72,8 @@ func handleClientConn(conn net.Conn, nt *nat.NatTable) {
 			continue
 		}
 
-		publicSocket := connection.PublicSocket(conn)
-		privateSocket := connection.PrivateSocket(conn)
-		orgSockets := &nat.SocketPair{
-			Public:  publicSocket,
-			Private: privateSocket,
-		}
-
-		packet, err := nat.SNAT(msg.Payload, nt, orgSockets)
+		publicSocket := publicSocket(conn)
+		packet, err := nat.SNAT(msg.Payload, nt, publicSocket)
 		if err != nil {
 			log.Printf("failed to apply SNAT: %v", err)
 			continue
@@ -88,6 +82,17 @@ func handleClientConn(conn net.Conn, nt *nat.NatTable) {
 		util.LogIPv4Packet("[INBOUND]", packet)
 
 		sendIPPacket(packet)
+	}
+}
+
+func publicSocket(c net.Conn) *nat.Socket {
+	addrSrt := c.RemoteAddr().String()
+	orgAddr, portStr, _ := net.SplitHostPort(addrSrt)
+	orgPort, _ := strconv.Atoi(portStr)
+
+	return &nat.Socket{
+		IPAddr: orgAddr,
+		Port:   uint16(orgPort),
 	}
 }
 
