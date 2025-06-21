@@ -6,7 +6,7 @@ import (
 	"strconv"
 )
 
-func RemoteSocket(c net.Conn) nat.Socket {
+func PublicSocket(c net.Conn) nat.Socket {
 	addrSrt := c.RemoteAddr().String()
 	orgAddr, portStr, _ := net.SplitHostPort(addrSrt)
 	orgPort, _ := strconv.Atoi(portStr)
@@ -17,13 +17,13 @@ func RemoteSocket(c net.Conn) nat.Socket {
 	}
 }
 
-func LocalSocket(c net.Conn) nat.Socket {
+func PrivateSocket(c net.Conn) nat.Socket {
 	addrSrt := c.LocalAddr().String()
-	orgAddr, portStr, _ := net.SplitHostPort(addrSrt)
+	_, portStr, _ := net.SplitHostPort(addrSrt)
 	orgPort, _ := strconv.Atoi(portStr)
 
 	return nat.Socket{
-		IPAddr: orgAddr,
+		IPAddr: "127.0.0.1",
 		Port:   uint16(orgPort),
 	}
 }

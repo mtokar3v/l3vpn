@@ -72,8 +72,8 @@ func handleClientConn(conn net.Conn, nt *nat.NatTable) {
 			continue
 		}
 
-		publicSocket := connection.RemoteSocket(conn)
-		privateSocket := connection.LocalSocket(conn)
+		publicSocket := connection.PublicSocket(conn)
+		privateSocket := connection.PrivateSocket(conn)
 		orgSockets := &nat.SocketPair{
 			Public:  publicSocket,
 			Private: privateSocket,
