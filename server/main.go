@@ -25,7 +25,11 @@ import (
 func main() {
 	nt := nat.NewNatTable()
 	cp := connection.NewConnectionPool()
-	tun, _ := tun.NewTUN()
+	tun, err := tun.NewTUN()
+	if err != nil {
+		log.Fatalf("failed to create TUN interface: %v", err)
+	}
+	log.Printf("TUN interface created: %s", tun.Name)
 
 	go listenClientTCPTraffic(nt, tun, cp)
 	go listenExternalIPTraffic(nt, cp)
