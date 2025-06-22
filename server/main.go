@@ -12,6 +12,7 @@ import (
 	"l3vpn-server/internal/connection"
 	"l3vpn-server/internal/nat"
 	"l3vpn-server/internal/protocol"
+	"l3vpn-server/internal/tun"
 	"l3vpn-server/internal/util"
 
 	"github.com/google/gopacket"
@@ -24,13 +25,15 @@ import (
 func main() {
 	nt := nat.NewNatTable()
 	cp := connection.NewConnectionPool()
-	go listenClientTCPTraffic(nt, cp)
+	tun, _ := tun.NewTUN()
+
+	go listenClientTCPTraffic(nt, tun, cp)
 	go listenExternalIPTraffic(nt, cp)
 
 	select {}
 }
 
-func listenClientTCPTraffic(nt *nat.NatTable, cp *connection.ConnectionPool) {
+func listenClientTCPTraffic(nt *nat.NatTable, tun *tun.TUN, cp *connection.ConnectionPool) {
 	listener, err := net.Listen("tcp4", ":"+config.VPNPort)
 	if err != nil {
 		log.Fatalf("failed to start TCP listener: %v", err)
@@ -49,11 +52,11 @@ func listenClientTCPTraffic(nt *nat.NatTable, cp *connection.ConnectionPool) {
 		log.Printf("client connected: %s", conn.RemoteAddr())
 
 		cp.Set(conn.RemoteAddr().String(), conn)
-		go handleClientConn(conn, nt)
+		go handleClientConn(conn, tun, nt)
 	}
 }
 
-func handleClientConn(conn net.Conn, nt *nat.NatTable) {
+func handleClientConn(conn net.Conn, tun *tun.TUN, nt *nat.NatTable) {
 	defer func() {
 		log.Printf("closing connection: %s", conn.RemoteAddr())
 		conn.Close()
@@ -81,7 +84,8 @@ func handleClientConn(conn net.Conn, nt *nat.NatTable) {
 
 		util.LogIPv4Packet("[INBOUND]", packet)
 
-		sendIPPacket(packet)
+		tun.Interface.Write(packet)
+		//sendIPPacket(packet)
 	}
 }
 

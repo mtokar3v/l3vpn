@@ -2,9 +2,8 @@ package network
 
 import (
 	"fmt"
-
-	"l3vpn-client/internal/config"
-	"l3vpn-client/internal/util"
+	"l3vpn-server/internal/config"
+	"l3vpn-server/internal/util"
 )
 
 func Enable(infeName string) error {

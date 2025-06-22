@@ -1,11 +1,9 @@
 package tun
 
 import (
-	"github.com/songgao/water"
-)
+	"l3vpn-server/internal/network"
 
-const (
-	packetBufferSize = 2000
+	"github.com/songgao/water"
 )
 
 type TUN struct {
@@ -13,16 +11,27 @@ type TUN struct {
 	Name      string
 }
 
-func Create() (*TUN, error) {
+func NewTUN() (*TUN, error) {
 	ifce, err := water.New(water.Config{
 		DeviceType: water.TUN,
 	})
 	if err != nil {
 		return nil, err
 	}
-
-	return &TUN{
+	tun := &TUN{
 		Interface: ifce,
 		Name:      ifce.Name(),
-	}, nil
+	}
+	if err := network.Enable(tun.Name); err != nil {
+		return nil, err
+	}
+
+	return tun, nil
+}
+
+func (t *TUN) Close() error {
+	if err := network.Enable(t.Name); err != nil {
+		return err
+	}
+	return t.Interface.Close()
 }

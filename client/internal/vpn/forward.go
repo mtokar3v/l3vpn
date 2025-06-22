@@ -62,7 +62,7 @@ func startListeningLoop(tunIf *tun.TUN, conn net.Conn) {
 		}
 
 		packet := buf[:n]
-		util.LogIPv4Packet(packet)
+		util.LogIPv4Packet("[INBOUND]", packet)
 
 		_, err = tunIf.Interface.Write(packet)
 		if err != nil {
@@ -121,7 +121,7 @@ func startForwardingLoop(tunIf *tun.TUN, conn net.Conn) {
 		}
 		packet := buf[:n]
 
-		//util.LogIPv4Packet(packet)
+		util.LogIPv4Packet("[OUTBOUND]", packet)
 
 		vp := protocol.NewVPNProtocol(packet)
 		_, err = conn.Write(vp.Serialize())

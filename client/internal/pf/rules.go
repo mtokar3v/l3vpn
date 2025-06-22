@@ -64,8 +64,19 @@ vpn_gw = "%s"
 by_pass_ip = "%s"
 by_pass_port = "%d"
 
+# Allow loopback traffic
+pass out quick on lo0 all keep state
+
+# Allow direct access to the bypass IP and port (e.g. VPN server)
 pass out quick on egress proto tcp from any to $by_pass_ip port $by_pass_port keep state
-pass out route-to ($vpn_if $vpn_gw) from any to any keep state
+
+# Allow direct access to private/local networks
+pass out quick on en0 from any to 192.168.0.0/16 keep state
+pass out quick on en0 from any to 10.0.0.0/8 keep state
+pass out quick on en0 from any to 172.16.0.0/12 keep state
+
+# Route all other traffic through VPN interface
+pass out route-to ($vpn_if $vpn_gw) from any to 146.190.62.39 keep state
 %s`, ruleBeginComment, c.Interface, config.Gateway, c.ByPassIP, c.ByPassPort, ruleEndComment)
 }
 

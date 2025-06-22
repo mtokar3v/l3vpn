@@ -20,7 +20,7 @@ func SNAT(originIPData []byte, nt *NatTable, publicOrgSocket *Socket) ([]byte, e
 
 	ip, ok := ipLayer.(*layers.IPv4)
 	if !ok {
-		return nil, errors.New("Failed to cast to IPv4 layer")
+		return nil, errors.New("failed to cast to IPv4 layer")
 	}
 
 	switch ip.Protocol {
@@ -94,8 +94,8 @@ func getOrCreateSrcSocket(ft *FiveTuple, nt *NatTable) *Socket {
 	if !ok {
 		port := nt.RentPort()
 		srcSockets = &SocketPair{
-			Public:  Socket{IPAddr: config.VPNAddress, Port: port},
-			Private: Socket{IPAddr: config.VPNAddress, Port: port},
+			Public: Socket{IPAddr: config.VPNAddress, Port: port},
+			// Private: Socket{IPAddr: config.VPNAddress, Port: port},
 		}
 		nt.Set(ft, srcSockets)
 	}
