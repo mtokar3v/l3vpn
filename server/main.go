@@ -80,6 +80,8 @@ func handleClientConn(conn net.Conn, tun *tun.TUN, nt *nat.NatTable) {
 		}
 
 		publicSocket := publicSocket(conn)
+
+		// TODO: use iptables for SNAT
 		packet, err := nat.SNAT(msg.Payload, nt, publicSocket)
 		if err != nil {
 			log.Printf("failed to apply SNAT: %v", err)
@@ -132,6 +134,9 @@ func sendIPPacket(rawIPPacket []byte) {
 }
 
 func listenExternalIPTraffic(nt *nat.NatTable, cp *connection.ConnectionPool) {
+
+	// TODO: iptables forward eth0 to tun0
+
 	iface := "eth0" // change this to your network interface
 	handle, err := pcap.OpenLive(iface, 65536, true, pcap.BlockForever)
 	//handle.SetBPFFilter("not dst port " + config.VPNPort)
@@ -144,7 +149,6 @@ func listenExternalIPTraffic(nt *nat.NatTable, cp *connection.ConnectionPool) {
 	log.Println("Listening for packets on", iface)
 
 	for packet := range packetSource.Packets() {
-
 		ethLayer := packet.Layer(layers.LayerTypeEthernet)
 		if ethLayer == nil {
 			log.Println("not an Ethernet packet")
@@ -152,6 +156,8 @@ func listenExternalIPTraffic(nt *nat.NatTable, cp *connection.ConnectionPool) {
 		}
 
 		eth, _ := ethLayer.(*layers.Ethernet)
+
+		// TODO: use iptables for DNAT
 		socket, packet, err := nat.DNAT(eth.Payload, nt)
 		if err != nil {
 			log.Printf("failed to apply PAT: %v", err)
