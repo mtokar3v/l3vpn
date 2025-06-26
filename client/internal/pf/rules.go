@@ -57,6 +57,7 @@ func (c *Config) cleanConfig() error {
 	return os.WriteFile(path, []byte(strings.Join(newLines, "\n")), 0644)
 }
 
+// TODO: Foxray сутя по netstat -anr выключает en0 и отдает все в tun
 func (c *Config) generateRules() string {
 	return fmt.Sprintf(`%s
 vpn_if = "%s"
