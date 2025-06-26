@@ -3,7 +3,7 @@ package vpn
 import (
 	"context"
 	"l3vpn-client/internal/config"
-	"l3vpn-client/internal/pf"
+	"l3vpn-client/internal/network"
 	"l3vpn-client/internal/protocol"
 	"l3vpn-client/internal/tun"
 	"l3vpn-client/internal/util"
@@ -17,28 +17,22 @@ import (
 func Start(ctx context.Context) {
 	log.Println("start forwarding")
 
-	tcpConn := establishVPNConnection()
-	defer tcpConn.Close()
-
 	tunIf := setupTUN()
-	defer tunIf.Close()
+	tcpConn := establishVPNConnection()
+	setRoutes()
 
-	pfConf := setupPF(tunIf.Name)
-	defer cleanupPF(pfConf)
+	log.Printf("tun ifce: %s", tunIf.Name)
 
-	handleContextCleanup(ctx, pfConf)
+	handleContextCleanup(ctx, tunIf, tcpConn)
 
-	// TODO: refactor it plz
 	go startListeningLoop(tunIf, tcpConn)
 	go startForwardingLoop(tunIf, tcpConn)
-
-	log.Print("end forwarding")
 
 	select {}
 }
 
 func establishVPNConnection() net.Conn {
-	vpnAddr := config.VPNAddress + ":" + strconv.Itoa(config.VPNPort)
+	vpnAddr := config.VPNServerAddress + ":" + strconv.Itoa(config.VPNServerPort)
 	log.Printf("try to connect to %s", vpnAddr)
 	conn, err := net.Dial("tcp4", vpnAddr)
 	if err != nil {
@@ -82,30 +76,30 @@ func setupTUN() *tun.TUN {
 	return tunIf
 }
 
-func setupPF(interfaceName string) *pf.Config {
-	conf := &pf.Config{
-		Interface:  interfaceName,
-		ByPassIP:   config.VPNAddress,
-		ByPassPort: config.VPNPort,
+func setRoutes() {
+	err := network.RemoveDefaultRoute()
+	if err != nil {
+		log.Fatalf("failed to delete default route: %v", err)
 	}
-	if err := pf.ApplyRules(conf); err != nil {
-		log.Fatalf("PF rule setup failed: %v", err)
-	}
-	log.Println("PF rules applied")
-	return conf
-}
 
-func cleanupPF(conf *pf.Config) {
-	log.Println("Cleaning up PF rules...")
-	if err := pf.RemoveRules(conf); err != nil {
-		log.Printf("warning: failed to remove PF rules: %v", err)
+	err = network.AddDefaultRoute(config.TUNGateway)
+	if err != nil {
+		log.Fatalf("failed to add default route: %v", err)
+	}
+
+	err = network.AddStaticRoute(config.VPNServerAddress, config.DefaultGateway)
+	if err != nil {
+		log.Fatalf("failed to add static route to vpn: %v", err)
 	}
 }
 
-func handleContextCleanup(ctx context.Context, pfConf *pf.Config) {
+func handleContextCleanup(ctx context.Context, tunIf *tun.TUN, conn net.Conn) {
 	go func() {
 		<-ctx.Done()
-		cleanupPF(pfConf)
+		tunIf.Close()
+		conn.Close()
+		network.RemoveDefaultRoute()
+		network.AddDefaultRoute(config.DefaultGateway)
 		os.Exit(0)
 	}()
 }

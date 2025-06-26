@@ -1,6 +1,7 @@
 package tun
 
 import (
+	"l3vpn-client/internal/config"
 	"l3vpn-client/internal/network"
 
 	"github.com/songgao/water"
@@ -22,7 +23,7 @@ func NewTUN() (*TUN, error) {
 		Interface: ifce,
 		Name:      ifce.Name(),
 	}
-	if err := network.Enable(tun.Name); err != nil {
+	if err := network.EnableInfe(tun.Name, config.TUNLocalIP, config.TUNGateway, config.MTU); err != nil {
 		return nil, err
 	}
 
@@ -30,8 +31,9 @@ func NewTUN() (*TUN, error) {
 }
 
 func (t *TUN) Close() error {
-	if err := network.Enable(t.Name); err != nil {
+	if err := network.DisableInfe(t.Name); err != nil {
 		return err
 	}
+
 	return t.Interface.Close()
 }

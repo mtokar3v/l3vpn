@@ -1,8 +1,10 @@
 package config
 
 const (
-	VPNAddress = "147.93.120.166"
-	VPNPort    = 1337
-	LocalIP    = "10.0.0.1"
-	Gateway    = "10.0.0.3"
+	VPNServerAddress = "147.93.120.166"
+	VPNServerPort    = 1337
+	TUNLocalIP       = "10.0.0.1"
+	TUNGateway       = "10.0.0.3"
+	DefaultGateway   = "192.168.0.1"
+	MTU              = 1300
 )
