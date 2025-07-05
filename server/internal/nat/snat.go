@@ -55,7 +55,7 @@ func snatTCP(packet gopacket.Packet, ip *layers.IPv4, publicOrgSocket *Socket, n
 	nt.Set(translatedTuple, orgSockets)
 
 	tcp.SrcPort = layers.TCPPort(srcSocket.Port)
-	ip.SrcIP = net.ParseIP(config.VPNAddress).To4()
+	ip.SrcIP = net.ParseIP(config.ForwardAddress).To4()
 	tcp.SetNetworkLayerForChecksum(ip)
 
 	return serializePacket(ip, tcp, packet)
