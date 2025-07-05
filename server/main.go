@@ -6,7 +6,6 @@ import (
 	"log"
 	"net"
 	"strconv"
-	"syscall"
 
 	"l3vpn-server/internal/config"
 	"l3vpn-server/internal/connection"
@@ -81,7 +80,6 @@ func handleClientConn(conn net.Conn, tun *tun.TUN, nt *nat.NatTable) {
 
 		publicSocket := publicSocket(conn)
 
-		// TODO: use iptables for SNAT
 		packet, err := nat.SNAT(msg.Payload, nt, publicSocket)
 		if err != nil {
 			log.Printf("failed to apply SNAT: %v", err)
@@ -91,7 +89,6 @@ func handleClientConn(conn net.Conn, tun *tun.TUN, nt *nat.NatTable) {
 		util.LogIPv4Packet("[INBOUND]", packet)
 
 		tun.Interface.Write(packet)
-		//sendIPPacket(packet)
 	}
 }
 
@@ -106,40 +103,10 @@ func publicSocket(c net.Conn) *nat.Socket {
 	}
 }
 
-func sendIPPacket(rawIPPacket []byte) {
-	fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_RAW, syscall.IPPROTO_RAW)
-	if err != nil {
-		log.Printf("failed to create raw socket: %v", err)
-		return
-	}
-	defer syscall.Close(fd)
-
-	if err := syscall.SetsockoptInt(fd, syscall.IPPROTO_IP, syscall.IP_HDRINCL, 1); err != nil {
-		log.Printf("failed to set IP_HDRINCL: %v", err)
-		return
-	}
-
-	var destIP [4]byte
-	copy(destIP[:], rawIPPacket[16:20])
-	log.Printf("Sending packet to IP: %v", destIP)
-
-	dest := syscall.SockaddrInet4{
-		Addr: destIP,
-	}
-
-	if err := syscall.Sendto(fd, rawIPPacket, 0, &dest); err != nil {
-		log.Printf("syscall sendto failed: %v", err)
-		return
-	}
-}
-
 func listenExternalIPTraffic(nt *nat.NatTable, cp *connection.ConnectionPool) {
-
-	// TODO: iptables forward eth0 to tun0
-
 	iface := "eth0" // change this to your network interface
 	handle, err := pcap.OpenLive(iface, 65536, true, pcap.BlockForever)
-	//handle.SetBPFFilter("not dst port " + config.VPNPort)
+	handle.SetBPFFilter("not dst port " + config.VPNPort)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -157,7 +124,6 @@ func listenExternalIPTraffic(nt *nat.NatTable, cp *connection.ConnectionPool) {
 
 		eth, _ := ethLayer.(*layers.Ethernet)
 
-		// TODO: use iptables for DNAT
 		socket, packet, err := nat.DNAT(eth.Payload, nt)
 		if err != nil {
 			log.Printf("failed to apply PAT: %v", err)

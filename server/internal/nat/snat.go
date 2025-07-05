@@ -83,7 +83,7 @@ func snatUDP(packet gopacket.Packet, ip *layers.IPv4, publicOrgSocket *Socket, n
 	nt.Set(translatedTuple, orgSockets)
 
 	udp.SrcPort = layers.UDPPort(srcSocket.Port)
-	ip.SrcIP = net.ParseIP(config.VPNAddress).To4()
+	ip.SrcIP = net.ParseIP(config.ForwardAddress).To4()
 	udp.SetNetworkLayerForChecksum(ip)
 
 	return serializePacket(ip, udp, packet)
