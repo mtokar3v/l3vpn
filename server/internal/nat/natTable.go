@@ -1,6 +1,9 @@
 package nat
 
-import "sync"
+import (
+	"log"
+	"sync"
+)
 
 const (
 	FstPort = 49152
@@ -47,6 +50,7 @@ func (t *NatTable) Set(ft *FiveTuple, sp *SocketPair) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.table[*ft] = *sp
+	log.Printf("set nt where key is %+v and value is %+v", *ft, *sp)
 }
 
 func (t *NatTable) RentPort() uint16 {

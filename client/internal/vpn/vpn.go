@@ -12,6 +12,9 @@ import (
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
 )
 
 func Start(ctx context.Context) {
@@ -114,6 +117,25 @@ func startForwardingLoop(tunIf *tun.TUN, conn net.Conn) {
 			continue
 		}
 		packet := buf[:n]
+
+		x := gopacket.NewPacket(packet, layers.LayerTypeIPv4, gopacket.Default)
+
+		ipLayer := x.Layer(layers.LayerTypeIPv4)
+		if ipLayer == nil {
+			log.Printf("Not an IPv4 packet")
+			return
+		}
+
+		ip, ok := ipLayer.(*layers.IPv4)
+		if !ok {
+			log.Printf("Failed to cast to IPv4 layer")
+			return
+		}
+
+		if ip.DstIP.String() != "146.190.62.39" {
+			// ignore
+			continue
+		}
 
 		util.LogIPv4Packet("[OUTBOUND]", packet)
 

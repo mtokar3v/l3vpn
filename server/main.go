@@ -106,7 +106,7 @@ func publicSocket(c net.Conn) *nat.Socket {
 func listenExternalIPTraffic(nt *nat.NatTable, cp *connection.ConnectionPool) {
 	iface := "eth0" // change this to your network interface
 	handle, err := pcap.OpenLive(iface, 65536, true, pcap.BlockForever)
-	handle.SetBPFFilter("not dst port " + config.VPNPort)
+	handle.SetBPFFilter("host 146.190.62.39")
 	if err != nil {
 		log.Fatal(err)
 	}

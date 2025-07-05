@@ -42,7 +42,11 @@ func dnatTCP(packet gopacket.Packet, ip *layers.IPv4, nt *NatTable) (*Socket, []
 	tuple := &FiveTuple{Src: dstSocket, Dst: srcSocket, Protocol: "TCP"}
 	orgSockets, ok := nt.Get(tuple)
 	if !ok {
-		return nil, nil, errors.New("unknown five tuple for dnat")
+		return nil, nil, fmt.Errorf(
+			"unknown five tuple for dnat; saddr: %s:%d; daddr: %s:%d",
+			tuple.Src.IPAddr, tuple.Src.Port,
+			tuple.Dst.IPAddr, tuple.Dst.Port,
+		)
 	}
 
 	tcp.DstPort = layers.TCPPort(orgSockets.Private.Port)
@@ -63,7 +67,11 @@ func dnatUDP(packet gopacket.Packet, ip *layers.IPv4, nt *NatTable) (*Socket, []
 	tuple := &FiveTuple{Src: dstSocket, Dst: srcSocket, Protocol: "UDP"}
 	orgSockets, ok := nt.Get(tuple)
 	if !ok {
-		return nil, nil, errors.New("unknown five tuple for dnat")
+		return nil, nil, fmt.Errorf(
+			"unknown five tuple for dnat; saddr: %s:%d; daddr: %s:%d",
+			tuple.Src.IPAddr, tuple.Src.Port,
+			tuple.Dst.IPAddr, tuple.Dst.Port,
+		)
 	}
 
 	udp.DstPort = layers.UDPPort(orgSockets.Private.Port)
