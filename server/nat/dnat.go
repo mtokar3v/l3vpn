@@ -27,6 +27,8 @@ func DNAT(originIPData []byte, nt *NatTable) (publicSocket *Socket, data []byte,
 		return dnatTCP(packet, ip, nt)
 	case layers.IPProtocolUDP:
 		return dnatUDP(packet, ip, nt)
+	case layers.IPProtocolICMPv4:
+		return dnatICMPv4(packet, ip, nt)
 	default:
 		return nil, nil, fmt.Errorf("unsupported protocol: %s", ip.Protocol)
 	}
@@ -42,11 +44,7 @@ func dnatTCP(packet gopacket.Packet, ip *layers.IPv4, nt *NatTable) (*Socket, []
 	tuple := &FiveTuple{Src: dstSocket, Dst: srcSocket, Protocol: "TCP"}
 	orgSockets, ok := nt.Get(tuple)
 	if !ok {
-		return nil, nil, fmt.Errorf(
-			"unknown five tuple for dnat; saddr: %s:%d; daddr: %s:%d",
-			tuple.Src.IPAddr, tuple.Src.Port,
-			tuple.Dst.IPAddr, tuple.Dst.Port,
-		)
+		return nil, nil, fmt.Errorf("unknown five tuple: %+v", tuple)
 	}
 
 	tcp.DstPort = layers.TCPPort(orgSockets.Private.Port)
@@ -67,11 +65,7 @@ func dnatUDP(packet gopacket.Packet, ip *layers.IPv4, nt *NatTable) (*Socket, []
 	tuple := &FiveTuple{Src: dstSocket, Dst: srcSocket, Protocol: "UDP"}
 	orgSockets, ok := nt.Get(tuple)
 	if !ok {
-		return nil, nil, fmt.Errorf(
-			"unknown five tuple for dnat; saddr: %s:%d; daddr: %s:%d",
-			tuple.Src.IPAddr, tuple.Src.Port,
-			tuple.Dst.IPAddr, tuple.Dst.Port,
-		)
+		return nil, nil, fmt.Errorf("unknown five tuple: %+v", tuple)
 	}
 
 	udp.DstPort = layers.UDPPort(orgSockets.Private.Port)
@@ -79,5 +73,24 @@ func dnatUDP(packet gopacket.Packet, ip *layers.IPv4, nt *NatTable) (*Socket, []
 	udp.SetNetworkLayerForChecksum(ip)
 
 	data, err := serializePacket(ip, udp, packet)
+	return &orgSockets.Public, data, err
+}
+
+func dnatICMPv4(packet gopacket.Packet, ip *layers.IPv4, nt *NatTable) (*Socket, []byte, error) {
+	icmpv4Layer := packet.Layer(layers.LayerTypeICMPv4)
+	icmpv4, _ := icmpv4Layer.(*layers.ICMPv4)
+
+	srcSocket := Socket{IPAddr: ip.SrcIP.String(), Port: 0}
+	dstSocket := Socket{IPAddr: ip.DstIP.String(), Port: 0}
+
+	tuple := &FiveTuple{Src: dstSocket, Dst: srcSocket, Protocol: "ICMPv4"}
+	orgSockets, ok := nt.Get(tuple)
+	if !ok {
+		return nil, nil, fmt.Errorf("unknown five tuple: %+v", tuple)
+	}
+
+	ip.DstIP = net.ParseIP(orgSockets.Private.IPAddr).To4()
+
+	data, err := serializePacket(ip, icmpv4, packet)
 	return &orgSockets.Public, data, err
 }

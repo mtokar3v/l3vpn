@@ -2,11 +2,9 @@ package vpn
 
 import (
 	"context"
-	"l3vpn-client/internal/config"
-	"l3vpn-client/internal/network"
-	"l3vpn-client/internal/protocol"
-	"l3vpn-client/internal/tun"
-	"l3vpn-client/internal/util"
+	"l3vpn/client/config"
+	"l3vpn/shared/tun"
+	"l3vpn/shared/util"
 	"log"
 	"net"
 	"os"
@@ -34,21 +32,27 @@ func Start(ctx context.Context) {
 	select {}
 }
 
-func establishVPNConnection() net.Conn {
+func establishVPNConnection() *net.TCPConn {
 	vpnAddr := config.VPNServerAddress + ":" + strconv.Itoa(config.VPNServerPort)
 	log.Printf("try to connect to %s", vpnAddr)
 	conn, err := net.Dial("tcp4", vpnAddr)
 	if err != nil {
 		log.Fatalf("failed to establish VPN connection: %v", err)
 	}
+
+	tcpConn, ok := conn.(*net.TCPConn)
+	if !ok {
+		log.Fatal("not a TCP connection")
+	}
+
 	log.Printf("VPN connection established to %s", vpnAddr)
 
 	time.Sleep(5 * time.Second)
 
-	return conn
+	return tcpConn
 }
 
-func startListeningLoop(tunIf *tun.TUN, conn net.Conn) {
+func startListeningLoop(tunIf *tun.Tun, conn net.Conn) {
 	log.Println("start listening")
 	buf := make([]byte, 2000)
 	for {
@@ -69,8 +73,8 @@ func startListeningLoop(tunIf *tun.TUN, conn net.Conn) {
 	}
 }
 
-func setupTUN() *tun.TUN {
-	tunIf, err := tun.NewTUN()
+func setupTUN() *tun.Tun {
+	tunIf, err := tun.NewTun()
 	if err != nil {
 		log.Fatalf("failed to create TUN interface: %v", err)
 	}
@@ -80,34 +84,34 @@ func setupTUN() *tun.TUN {
 }
 
 func setRoutes() {
-	err := network.RemoveDefaultRoute()
+	err := util.RemoveDefaultRoute()
 	if err != nil {
 		log.Fatalf("failed to delete default route: %v", err)
 	}
 
-	err = network.AddDefaultRoute(config.TUNGateway)
+	err = util.AddDefaultRoute(config.TUNGateway)
 	if err != nil {
 		log.Fatalf("failed to add default route: %v", err)
 	}
 
-	err = network.AddStaticRoute(config.VPNServerAddress, config.DefaultGateway)
+	err = util.AddStaticRoute(config.VPNServerAddress, config.DefaultGateway)
 	if err != nil {
 		log.Fatalf("failed to add static route to vpn: %v", err)
 	}
 }
 
-func handleContextCleanup(ctx context.Context, tunIf *tun.TUN, conn net.Conn) {
+func handleContextCleanup(ctx context.Context, tunIf *tun.Tun, conn net.Conn) {
 	go func() {
 		<-ctx.Done()
 		tunIf.Close()
 		conn.Close()
-		network.RemoveDefaultRoute()
-		network.AddDefaultRoute(config.DefaultGateway)
+		util.RemoveDefaultRoute()
+		util.AddDefaultRoute(config.DefaultGateway)
 		os.Exit(0)
 	}()
 }
 
-func startForwardingLoop(tunIf *tun.TUN, conn net.Conn) {
+func startForwardingLoop(tunIf *tun.Tun, conn *net.TCPConn) {
 	log.Println("start forwarding")
 	buf := make([]byte, 2000)
 	for {
@@ -138,9 +142,7 @@ func startForwardingLoop(tunIf *tun.TUN, conn net.Conn) {
 		}
 
 		util.LogIPv4Packet("[OUTBOUND]", packet)
-
-		vp := protocol.NewVPNProtocol(packet)
-		_, err = conn.Write(vp.Serialize())
+		_, err = util.WritePacket(conn, packet)
 		if err != nil {
 			log.Printf("warning: packet forwarding error: %v", err)
 			continue

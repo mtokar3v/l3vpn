@@ -3,7 +3,7 @@ package nat
 import (
 	"errors"
 	"fmt"
-	"l3vpn-server/internal/config"
+	"l3vpn/server/config"
 	"net"
 
 	"github.com/google/gopacket"
@@ -83,7 +83,7 @@ func snatUDP(packet gopacket.Packet, ip *layers.IPv4, publicOrgSocket *Socket, n
 	nt.Set(translatedTuple, orgSockets)
 
 	udp.SrcPort = layers.UDPPort(srcSocket.Port)
-	ip.SrcIP = net.ParseIP(config.ForwardAddress).To4()
+	ip.SrcIP = net.ParseIP(config.ForwardAddress).To4() // kernel level snat changes to eth ifce addr
 	udp.SetNetworkLayerForChecksum(ip)
 
 	return serializePacket(ip, udp, packet)

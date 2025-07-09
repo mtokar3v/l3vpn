@@ -1,18 +1,15 @@
 package main
 
 import (
-	"bufio"
 	"io"
+	"l3vpn/server/config"
+	"l3vpn/server/connection"
+	"l3vpn/server/nat"
+	"l3vpn/shared/tun"
+	"l3vpn/shared/util"
 	"log"
 	"net"
 	"strconv"
-
-	"l3vpn-server/internal/config"
-	"l3vpn-server/internal/connection"
-	"l3vpn-server/internal/nat"
-	"l3vpn-server/internal/protocol"
-	"l3vpn-server/internal/tun"
-	"l3vpn-server/internal/util"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -24,7 +21,7 @@ import (
 func main() {
 	nt := nat.NewNatTable()
 	cp := connection.NewConnectionPool()
-	tun, err := tun.NewTUN()
+	tun, err := tun.NewTun()
 	if err != nil {
 		log.Fatalf("failed to create TUN interface: %v", err)
 	}
@@ -36,39 +33,38 @@ func main() {
 	select {}
 }
 
-func listenClientTCPTraffic(nt *nat.NatTable, tun *tun.TUN, cp *connection.ConnectionPool) {
+func listenClientTCPTraffic(nt *nat.NatTable, tun *tun.Tun, cp *connection.ConnectionPool) {
 	listener, err := net.Listen("tcp4", ":"+config.VPNPort)
 	if err != nil {
 		log.Fatalf("failed to start TCP listener: %v", err)
 	}
 	defer listener.Close()
-
 	log.Printf("VPN server listening on port %s\n", config.VPNPort)
-
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
 			log.Printf("failed to accept connection: %v", err)
 			continue
 		}
+		tcpConn, ok := conn.(*net.TCPConn)
+		if !ok {
+			log.Printf("not a TCP connection")
+			continue
+		}
 
 		log.Printf("client connected: %s", conn.RemoteAddr())
-
 		cp.Set(conn.RemoteAddr().String(), conn)
-		go handleClientConn(conn, tun, nt)
+		go handleClientConn(tcpConn, tun, nt)
 	}
 }
 
-func handleClientConn(conn net.Conn, tun *tun.TUN, nt *nat.NatTable) {
+func handleClientConn(conn *net.TCPConn, tun *tun.Tun, nt *nat.NatTable) {
 	defer func() {
 		log.Printf("closing connection: %s", conn.RemoteAddr())
 		conn.Close()
 	}()
-
-	reader := bufio.NewReader(conn)
-
 	for {
-		msg, err := protocol.Read(reader)
+		packet, err := util.ReadPacket(conn)
 		if err != nil {
 			if err == io.EOF {
 				log.Printf("client disconnected: %s", conn.RemoteAddr())
@@ -77,17 +73,13 @@ func handleClientConn(conn net.Conn, tun *tun.TUN, nt *nat.NatTable) {
 			log.Printf("failed to read protocol message: %v", err)
 			continue
 		}
-
 		publicSocket := publicSocket(conn)
-
-		packet, err := nat.SNAT(msg.Payload, nt, publicSocket)
+		packet, err = nat.SNAT(packet, nt, publicSocket)
 		if err != nil {
 			log.Printf("failed to apply SNAT: %v", err)
 			continue
 		}
-
 		util.LogIPv4Packet("[INBOUND]", packet)
-
 		tun.Interface.Write(packet)
 	}
 }
@@ -106,7 +98,7 @@ func publicSocket(c net.Conn) *nat.Socket {
 func listenExternalIPTraffic(nt *nat.NatTable, cp *connection.ConnectionPool) {
 	iface := "eth0" // change this to your network interface
 	handle, err := pcap.OpenLive(iface, 65536, true, pcap.BlockForever)
-	handle.SetBPFFilter("host 146.190.62.39")
+	handle.SetBPFFilter("src host 146.190.62.39")
 	if err != nil {
 		log.Fatal(err)
 	}

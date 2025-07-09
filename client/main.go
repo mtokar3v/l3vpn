@@ -2,10 +2,9 @@ package main
 
 import (
 	"context"
+	"l3vpn/client/vpn"
 	"os/signal"
 	"syscall"
-
-	"l3vpn-client/internal/vpn"
 )
 
 func main() {

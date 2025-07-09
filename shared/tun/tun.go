@@ -1,36 +1,37 @@
 package tun
 
 import (
-	"l3vpn-server/internal/network"
+	"l3vpn/client/config"
+	"l3vpn/shared/util"
 
 	"github.com/songgao/water"
 )
 
-type TUN struct {
+type Tun struct {
 	Interface *water.Interface
 	Name      string
 }
 
-func NewTUN() (*TUN, error) {
+func NewTun() (*Tun, error) {
 	ifce, err := water.New(water.Config{
 		DeviceType: water.TUN,
 	})
 	if err != nil {
 		return nil, err
 	}
-	tun := &TUN{
+	tun := &Tun{
 		Interface: ifce,
 		Name:      ifce.Name(),
 	}
-	if err := network.Enable(tun.Name); err != nil {
+	if err := util.EnableInfe(tun.Name, config.TUNLocalIP, config.TUNGateway, config.MTU); err != nil {
 		return nil, err
 	}
 
 	return tun, nil
 }
 
-func (t *TUN) Close() error {
-	if err := network.Enable(t.Name); err != nil {
+func (t *Tun) Close() error {
+	if err := util.DisableInfe(t.Name); err != nil {
 		return err
 	}
 	return t.Interface.Close()
