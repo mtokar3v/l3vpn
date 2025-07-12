@@ -52,19 +52,15 @@ func establishVPNConnection() *net.TCPConn {
 	return tcpConn
 }
 
-func startListeningLoop(tunIf *tun.Tun, conn net.Conn) {
+func startListeningLoop(tunIf *tun.Tun, conn *net.TCPConn) {
 	log.Println("start listening")
-	buf := make([]byte, 2000)
 	for {
-		n, err := conn.Read(buf)
+		packet, err := util.ReadPacket(conn)
 		if err != nil {
 			log.Printf("listening error %v", err)
 			continue
 		}
-
-		packet := buf[:n]
 		util.LogIPv4Packet("[INBOUND]", packet)
-
 		_, err = tunIf.Interface.Write(packet)
 		if err != nil {
 			log.Printf("warning: tun write fail: %v", err)
@@ -79,7 +75,6 @@ func setupTUN() *tun.Tun {
 		log.Fatalf("failed to create TUN interface: %v", err)
 	}
 	log.Printf("TUN interface created: %s", tunIf.Name)
-
 	return tunIf
 }
 

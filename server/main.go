@@ -53,7 +53,7 @@ func listenClientTCPTraffic(nt *nat.NatTable, tun *tun.Tun, cp *connection.Conne
 		}
 
 		log.Printf("client connected: %s", conn.RemoteAddr())
-		cp.Set(conn.RemoteAddr().String(), conn)
+		cp.Set(conn.RemoteAddr().String(), tcpConn)
 		go handleClientConn(tcpConn, tun, nt)
 	}
 }
@@ -128,19 +128,17 @@ func listenExternalIPTraffic(nt *nat.NatTable, cp *connection.ConnectionPool) {
 	}
 }
 
-func sendIPPacketToClient(socket *nat.Socket, rawIP []byte, connections *connection.ConnectionPool) bool {
+func sendIPPacketToClient(socket *nat.Socket, ipPacket []byte, connections *connection.ConnectionPool) bool {
 	clientAddr := socket.IPAddr + ":" + strconv.Itoa(int(socket.Port))
 	conn, ok := connections.Get(clientAddr)
 	if !ok {
 		log.Printf("try to send ip packet to unknown connection %s", clientAddr)
 		return false
 	}
-
-	_, err := conn.Write(rawIP)
+	_, err := util.WritePacket(conn, ipPacket)
 	if err != nil {
 		log.Printf("Failed to write to connection %s: %v", clientAddr, err)
 		return false
 	}
-
 	return true
 }
