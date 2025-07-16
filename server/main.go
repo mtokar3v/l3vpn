@@ -25,11 +25,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to create TUN interface: %v", err)
 	}
+	err = tun.Up()
+	if err != nil {
+		log.Fatalf("failed to up tun interface: %v", err)
+	}
 	log.Printf("TUN interface created: %s", tun.Name)
-
 	go listenClientTCPTraffic(nt, tun, cp)
 	go listenExternalIPTraffic(nt, cp)
-
 	select {}
 }
 
@@ -80,7 +82,7 @@ func handleClientConn(conn *net.TCPConn, tun *tun.Tun, nt *nat.NatTable) {
 			continue
 		}
 		util.LogIPv4Packet("[INBOUND]", packet)
-		tun.Interface.Write(packet)
+		tun.Infe.Write(packet)
 	}
 }
 

@@ -10,25 +10,20 @@ import (
 	"os"
 	"strconv"
 	"time"
-
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
 )
 
 func Start(ctx context.Context) {
 	log.Println("start forwarding")
-
-	tunIf := setupTUN()
+	tun := setupTUN()
 	tcpConn := establishVPNConnection()
+	if err := setupNat(tun); err != nil {
+		log.Fatalf("failed to set up NAT: %v", err)
+	}
 	setRoutes()
-
-	log.Printf("tun ifce: %s", tunIf.Name)
-
-	handleContextCleanup(ctx, tunIf, tcpConn)
-
-	go startListeningLoop(tunIf, tcpConn)
-	go startForwardingLoop(tunIf, tcpConn)
-
+	log.Printf("tun ifce: %s", tun.Name)
+	handleContextCleanup(ctx, tun, tcpConn)
+	go startListeningLoop(tun, tcpConn)
+	go startForwardingLoop(tun, tcpConn)
 	select {}
 }
 
@@ -61,7 +56,7 @@ func startListeningLoop(tunIf *tun.Tun, conn *net.TCPConn) {
 			continue
 		}
 		util.LogIPv4Packet("[INBOUND]", packet)
-		_, err = tunIf.Interface.Write(packet)
+		_, err = tunIf.Infe.Write(packet)
 		if err != nil {
 			log.Printf("warning: tun write fail: %v", err)
 			continue
@@ -74,8 +69,28 @@ func setupTUN() *tun.Tun {
 	if err != nil {
 		log.Fatalf("failed to create TUN interface: %v", err)
 	}
+	err = tunIf.Up()
+	if err != nil {
+		log.Fatalf("failed to up tun interface: %v", err)
+	}
 	log.Printf("TUN interface created: %s", tunIf.Name)
 	return tunIf
+}
+
+func setupNat(t *tun.Tun) error {
+	if err := util.FlushNat(); err != nil {
+		return err
+	}
+	// All incoming packets with tun ip pass to tun infe
+	// NAT return origin daddr and kernel could handle packet normally
+	if err := util.Snat(t.Name, config.TUNGateway); err != nil {
+		return err
+	}
+	// tunx -> enx
+	if err := util.AcceptForwarding(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func setRoutes() {
@@ -110,31 +125,31 @@ func startForwardingLoop(tunIf *tun.Tun, conn *net.TCPConn) {
 	log.Println("start forwarding")
 	buf := make([]byte, 2000)
 	for {
-		n, err := tunIf.Interface.Read(buf)
+		n, err := tunIf.Infe.Read(buf)
 		if err != nil {
 			log.Printf("warning: tun read fail: %v", err)
 			continue
 		}
 		packet := buf[:n]
 
-		x := gopacket.NewPacket(packet, layers.LayerTypeIPv4, gopacket.Default)
+		// x := gopacket.NewPacket(packet, layers.LayerTypeIPv4, gopacket.Default)
 
-		ipLayer := x.Layer(layers.LayerTypeIPv4)
-		if ipLayer == nil {
-			log.Printf("Not an IPv4 packet")
-			return
-		}
+		// ipLayer := x.Layer(layers.LayerTypeIPv4)
+		// if ipLayer == nil {
+		// 	log.Printf("Not an IPv4 packet")
+		// 	return
+		// }
 
-		ip, ok := ipLayer.(*layers.IPv4)
-		if !ok {
-			log.Printf("Failed to cast to IPv4 layer")
-			return
-		}
+		// ip, ok := ipLayer.(*layers.IPv4)
+		// if !ok {
+		// 	log.Printf("Failed to cast to IPv4 layer")
+		// 	return
+		// }
 
-		if ip.DstIP.String() != "146.190.62.39" {
-			// ignore
-			continue
-		}
+		// if ip.DstIP.String() != "146.190.62.39" {
+		// 	// ignore
+		// 	continue
+		// }
 
 		util.LogIPv4Packet("[OUTBOUND]", packet)
 		_, err = util.WritePacket(conn, packet)

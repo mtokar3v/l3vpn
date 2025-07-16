@@ -8,31 +8,28 @@ import (
 )
 
 type Tun struct {
-	Interface *water.Interface
-	Name      string
+	Infe *water.Interface
+	Name string
 }
 
 func NewTun() (*Tun, error) {
-	ifce, err := water.New(water.Config{
-		DeviceType: water.TUN,
-	})
-	if err != nil {
+	if ifce, err := water.New(water.Config{DeviceType: water.TUN}); err == nil {
+		return &Tun{
+			Infe: ifce,
+			Name: ifce.Name(),
+		}, nil
+	} else {
 		return nil, err
 	}
-	tun := &Tun{
-		Interface: ifce,
-		Name:      ifce.Name(),
-	}
-	if err := util.EnableInfe(tun.Name, config.TUNLocalIP, config.TUNGateway, config.MTU); err != nil {
-		return nil, err
-	}
+}
 
-	return tun, nil
+func (t *Tun) Up() error {
+	return util.EnableInfe(t.Name, config.TUNLocalIP, config.TUNGateway, config.MTU)
 }
 
 func (t *Tun) Close() error {
 	if err := util.DisableInfe(t.Name); err != nil {
 		return err
 	}
-	return t.Interface.Close()
+	return t.Infe.Close()
 }
