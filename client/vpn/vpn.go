@@ -16,9 +16,6 @@ func Start(ctx context.Context) {
 	log.Println("start forwarding")
 	tun := setupTUN()
 	tcpConn := establishVPNConnection()
-	if err := setupNat(tun); err != nil {
-		log.Fatalf("failed to set up NAT: %v", err)
-	}
 	setRoutes()
 	log.Printf("tun ifce: %s", tun.Name)
 	handleContextCleanup(ctx, tun, tcpConn)
@@ -75,22 +72,6 @@ func setupTUN() *tun.Tun {
 	}
 	log.Printf("TUN interface created: %s", tunIf.Name)
 	return tunIf
-}
-
-func setupNat(t *tun.Tun) error {
-	if err := util.FlushNat(); err != nil {
-		return err
-	}
-	// All incoming packets with tun ip pass to tun infe
-	// NAT return origin daddr and kernel could handle packet normally
-	if err := util.Snat(t.Name, config.TUNGateway); err != nil {
-		return err
-	}
-	// tunx -> enx
-	if err := util.AcceptForwarding(); err != nil {
-		return err
-	}
-	return nil
 }
 
 func setRoutes() {

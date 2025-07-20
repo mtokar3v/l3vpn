@@ -10,7 +10,9 @@ import (
 	"github.com/google/gopacket/layers"
 )
 
-func SNAT(originIPData []byte, nt *NatTable, publicOrgSocket *Socket) ([]byte, error) {
+// TODO: refactor nat logic, strange func infe, nat is about addr replacement, but here it isn't obvious at all
+
+func Snat(originIPData []byte, nt *NatTable, publicOrgSocket *Socket) ([]byte, error) {
 	packet := gopacket.NewPacket(originIPData, layers.LayerTypeIPv4, gopacket.Default)
 
 	ipLayer := packet.Layer(layers.LayerTypeIPv4)
@@ -55,7 +57,7 @@ func snatTCP(packet gopacket.Packet, ip *layers.IPv4, publicOrgSocket *Socket, n
 	nt.Set(translatedTuple, orgSockets)
 
 	tcp.SrcPort = layers.TCPPort(srcSocket.Port)
-	ip.SrcIP = net.ParseIP(config.ForwardAddress).To4()
+	ip.SrcIP = net.ParseIP(config.Gateway).To4()
 	tcp.SetNetworkLayerForChecksum(ip)
 
 	return serializePacket(ip, tcp, packet)
@@ -83,7 +85,7 @@ func snatUDP(packet gopacket.Packet, ip *layers.IPv4, publicOrgSocket *Socket, n
 	nt.Set(translatedTuple, orgSockets)
 
 	udp.SrcPort = layers.UDPPort(srcSocket.Port)
-	ip.SrcIP = net.ParseIP(config.ForwardAddress).To4() // kernel level snat changes to eth ifce addr
+	ip.SrcIP = net.ParseIP(config.Gateway).To4() // kernel level snat changes to eth ifce addr
 	udp.SetNetworkLayerForChecksum(ip)
 
 	return serializePacket(ip, udp, packet)

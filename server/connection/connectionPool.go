@@ -5,25 +5,25 @@ import (
 	"sync"
 )
 
-type ConnectionPool struct {
+type Pool struct {
 	mu   sync.RWMutex
 	pool map[string]net.TCPConn
 }
 
-func NewConnectionPool() *ConnectionPool {
-	return &ConnectionPool{
+func NewConnectionPool() *Pool {
+	return &Pool{
 		pool: make(map[string]net.TCPConn),
 	}
 }
 
-func (p *ConnectionPool) Get(addr string) (*net.TCPConn, bool) {
+func (p *Pool) Get(addr string) (*net.TCPConn, bool) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	val, ok := p.pool[addr]
 	return &val, ok
 }
 
-func (p *ConnectionPool) Set(addr string, conn *net.TCPConn) bool {
+func (p *Pool) Set(addr string, conn *net.TCPConn) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.pool[addr] = *conn

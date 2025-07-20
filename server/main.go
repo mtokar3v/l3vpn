@@ -21,6 +21,15 @@ import (
 func main() {
 	nt := nat.NewNatTable()
 	cp := connection.NewConnectionPool()
+	tun := setupTun()
+	setupNat(tun)
+	go listenClients(nt, tun, cp)
+	go listenTun(nt, tun, cp)
+	//go listenExternalIPTraffic(nt, cp)
+	select {}
+}
+
+func setupTun() *tun.Tun {
 	tun, err := tun.NewTun()
 	if err != nil {
 		log.Fatalf("failed to create TUN interface: %v", err)
@@ -30,12 +39,23 @@ func main() {
 		log.Fatalf("failed to up tun interface: %v", err)
 	}
 	log.Printf("TUN interface created: %s", tun.Name)
-	go listenClientTCPTraffic(nt, tun, cp)
-	go listenExternalIPTraffic(nt, cp)
-	select {}
+	return tun
 }
 
-func listenClientTCPTraffic(nt *nat.NatTable, tun *tun.Tun, cp *connection.ConnectionPool) {
+func setupNat(t *tun.Tun) error {
+	if err := util.FlushNat(); err != nil {
+		return err
+	}
+	if err := util.Snat(t.Name, config.VPNAddress); err != nil {
+		return err
+	}
+	if err := util.AcceptForwarding(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func listenClients(nt *nat.NatTable, tun *tun.Tun, cp *connection.Pool) {
 	listener, err := net.Listen("tcp4", ":"+config.VPNPort)
 	if err != nil {
 		log.Fatalf("failed to start TCP listener: %v", err)
@@ -76,7 +96,7 @@ func handleClientConn(conn *net.TCPConn, tun *tun.Tun, nt *nat.NatTable) {
 			continue
 		}
 		publicSocket := publicSocket(conn)
-		packet, err = nat.SNAT(packet, nt, publicSocket)
+		packet, err = nat.Snat(packet, nt, publicSocket)
 		if err != nil {
 			log.Printf("failed to apply SNAT: %v", err)
 			continue
@@ -97,7 +117,27 @@ func publicSocket(c net.Conn) *nat.Socket {
 	}
 }
 
-func listenExternalIPTraffic(nt *nat.NatTable, cp *connection.ConnectionPool) {
+func listenTun(nt *nat.NatTable, tun *tun.Tun, cp *connection.Pool) {
+	log.Println("start forwarding")
+	buf := make([]byte, 2000)
+	for {
+		n, err := tun.Infe.Read(buf)
+		if err != nil {
+			log.Printf("warning: tun read fail: %v", err)
+			continue
+		}
+		packet := buf[:n]
+		util.LogIPv4Packet("[OUTBOUND]", packet)
+		socket, packet, err := nat.DNAT(packet, nt)
+		if err != nil {
+			log.Printf("failed to apply PAT: %v", err)
+			continue
+		}
+		sendIPPacketToClient(socket, packet, cp)
+	}
+}
+
+func listenExternalIPTraffic(nt *nat.NatTable, cp *connection.Pool) {
 	iface := "eth0" // change this to your network interface
 	handle, err := pcap.OpenLive(iface, 65536, true, pcap.BlockForever)
 	handle.SetBPFFilter("src host 146.190.62.39")
@@ -130,7 +170,7 @@ func listenExternalIPTraffic(nt *nat.NatTable, cp *connection.ConnectionPool) {
 	}
 }
 
-func sendIPPacketToClient(socket *nat.Socket, ipPacket []byte, connections *connection.ConnectionPool) bool {
+func sendIPPacketToClient(socket *nat.Socket, ipPacket []byte, connections *connection.Pool) bool {
 	clientAddr := socket.IPAddr + ":" + strconv.Itoa(int(socket.Port))
 	conn, ok := connections.Get(clientAddr)
 	if !ok {
