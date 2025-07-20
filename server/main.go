@@ -46,7 +46,7 @@ func setupNat(t *tun.Tun) error {
 	if err := util.FlushNat(); err != nil {
 		return err
 	}
-	if err := util.Snat(t.Name, config.VPNAddress); err != nil {
+	if err := util.Snat("eth0", config.VPNAddress); err != nil {
 		return err
 	}
 	if err := util.AcceptForwarding(); err != nil {
